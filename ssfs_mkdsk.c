@@ -2,12 +2,51 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <string.h>
+#include <stdbool.h>
 
 #define DEFAULT_FILE_NAME "DISK"
 
 void printUsageAndExit(){
     fprintf(stderr, "ssfs_mkdsk <num blocks> <block size> <disk file name>\n");
     exit(EXIT_FAILURE);            
+}
+
+/*
+ * Write block size, num blocks, and initialize the inode map
+ */
+void setupDisk(FILE *diskFile, int numBlocks, int blockSize){
+    char buffer[blockSize];
+    
+    //Write numBlocks and blockSize to buffer
+    int bytesWritten = 0;
+    memcpy(buffer, &numBlocks, sizeof(int));
+    bytesWritten += sizeof(int);
+    memcpy(buffer + bytesWritten, &blockSize, sizeof(int));
+    bytesWritten += sizeof(int);
+
+    int inodesLeft = 256;
+    int inodeInit = -1;
+    bool stuffLeftInBuffer = false;
+
+    //Set all 256 inodes to -1 to indicate they have no file in disk right now
+    while(inodesLeft > 0){
+        memcpy(buffer + bytesWritten, &inodeInit, sizeof(int)); 
+        bytesWritten += sizeof(int);
+        inodesLeft -= 1;
+        stuffLeftInBuffer = true;
+
+        //Buffer full - write to disk
+        if(bytesWritten == blockSize){//block size guaranteed to be a power of 2 
+            fwrite(buffer, blockSize, 1, diskFile); //Write buffer to disk
+            memset(buffer, 0, blockSize); //clear buffer
+            bytesWritten = 0;
+            stuffLeftInBuffer = false;
+        }
+    }
+    
+    if(stuffLeftInBuffer)
+        fwrite(buffer, blockSize, 1, diskFile);
 }
 
 int main(int argc, char *argv[]){
@@ -40,6 +79,7 @@ int main(int argc, char *argv[]){
 
     FILE *diskFile = fopen(fileName, "w");
     ftruncate(fileno(diskFile), numBlocks * blockSize);
+    setupDisk(diskFile, numBlocks, blockSize);
     fclose(diskFile); 
     
     return 0;
