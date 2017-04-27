@@ -1,22 +1,33 @@
 #include <stdlib.h>
 #include <stdio.h>
-void thread();
+#include <string.h>
+#include <pthread.h>
+#include <errno.h>
+#include <ctype.h>
+#include <unistd.h>
+void* threadops(void* commandFile);
 int main(int argc, char** argv){
+	int s;
 	if (argc > 6){
 		printf("usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt");
 		exit(0);
 	}
 	int i;
-	String filename;
+	char *filename;
 	for (i = 2; i < argc; i++){
+		pthread_t p;
 		filename = argv[i];
-		fopen();
-		
+		FILE *commandFile = fopen(filename, "r");
+		//send new thread to threadops
+		void* v = (void*)commandFile;
+		s = pthread_create(&p,NULL,threadops,v);
 	}
 }
 
-void threadops(FILE* inputFile){
-	while (){
-
-	}
+void* threadops(void* commandFile){
+	FILE* f = (FILE*)commandFile;
+	
+	//while (fscanf(f, "%s") != EOF){
+		
+	//}
 }
