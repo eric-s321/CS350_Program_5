@@ -26,13 +26,13 @@ void setupDisk(FILE *diskFile, int numBlocks, int blockSize){
     bytesWritten += sizeof(int);
 
     int inodesLeft = 256;
-    int inodeInit = -1;
+    int8_t inodeInt = -1;
     bool stuffLeftInBuffer = false;
 
     //Set all 256 inodes to -1 to indicate they have no file in disk right now
     while(inodesLeft > 0){
-        memcpy(buffer + bytesWritten, &inodeInit, sizeof(int)); 
-        bytesWritten += sizeof(int);
+        memcpy(buffer + bytesWritten, &inodeInt, sizeof(int8_t)); 
+        bytesWritten += sizeof(int8_t);
         inodesLeft -= 1;
         stuffLeftInBuffer = true;
 
@@ -45,8 +45,21 @@ void setupDisk(FILE *diskFile, int numBlocks, int blockSize){
         }
     }
     
+    //Write what was left in the buffer if it wasn't full
     if(stuffLeftInBuffer)
-        fwrite(buffer, blockSize, 1, diskFile);
+        fwrite(buffer, bytesWritten, 1, diskFile);
+    
+    //Set up free block bitmap
+    int8_t blockMap[numBlocks];
+    int8_t EMPTY_BLOCK = -1;
+    bytesWritten = 0;
+
+    for(int i = 0; i < numBlocks; i++){
+        memcpy(blockMap + bytesWritten, &EMPTY_BLOCK, sizeof(int8_t)); 
+        bytesWritten += sizeof(int8_t);
+    }
+
+    fwrite(blockMap, numBlocks, 1, diskFile);
 }
 
 int main(int argc, char *argv[]){
