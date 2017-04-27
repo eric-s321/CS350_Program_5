@@ -5,6 +5,17 @@
 #include <errno.h>
 #include <ctype.h>
 #include <unistd.h>
+
+using namespace std;
+
+struct iNodes{
+	char *name;
+	int size;
+	int direct[12];
+	int indirect;
+	int indirect2x;
+} iNode;
+
 void* threadops(void* commandFile);
 int main(int argc, char** argv){
 	int s;

@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -pthread -std=gnu99
+CFLAGS = -Wall -pthread
 
 
 all: ssfs_mkdsk ssfs
