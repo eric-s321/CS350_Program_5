@@ -6,6 +6,8 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <string>
+#include <map>
+#include <iostream>
 
 using namespace std;
 
@@ -18,10 +20,16 @@ struct iNodes{
 } iNode;
 
 void* threadops(void* commandFile);
+
+class DiskController{
+    
+
+};
+
 int main(int argc, char** argv){
 	int s;
-	if (argc > 6){
-		printf("usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt");
+	if (argc > 6 || argc < 3){
+		fprintf(stderr, "usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt\n");
 		exit(0);
 	}
 	int i;
@@ -29,6 +37,7 @@ int main(int argc, char** argv){
 	for (i = 2; i < argc; i++){
 		pthread_t p;
 		filename = argv[i];
+        cout << "filename is " << filename << endl;
 		FILE *commandFile = fopen(filename, "r");
 		//send new thread to threadops
 		void* v = (void*)commandFile;

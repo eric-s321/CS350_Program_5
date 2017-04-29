@@ -63,6 +63,10 @@ void setupDisk(FILE *diskFile, int numBlocks, int blockSize){
     fwrite(blockMap, numBlocks, 1, diskFile);
 }
 
+bool isPowerOfTwo(int num){
+    return (num & -num) == num;
+}
+
 int main(int argc, char *argv[]){
 
     int numBlocks;
@@ -75,14 +79,14 @@ int main(int argc, char *argv[]){
     }
 
     numBlocks = atoi(argv[1]);
-    if(numBlocks < 1024 || numBlocks > 128 * 1024){
-        fprintf(stderr, "The number of blocks must be between 1024 and 128K inclusive\n"); 
+    if(numBlocks < 1024 || numBlocks > 128 * 1024 || !isPowerOfTwo(numBlocks)){
+        fprintf(stderr, "The number of blocks must be a power of two between 1024 and 128K inclusive\n"); 
         printUsageAndExit();
     }
 
     blockSize = atoi(argv[2]);
-    if(blockSize < 128 || blockSize > 512){
-        fprintf(stderr, "The block size must be between 128 and 512 inclusive\n");
+    if(blockSize < 128 || blockSize > 512 || !isPowerOfTwo(blockSize)){
+        fprintf(stderr, "The block size must be a power of two between 128 and 512 inclusive\n");
         printUsageAndExit();
     }
 
