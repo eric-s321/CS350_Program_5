@@ -5,11 +5,12 @@
 #include <errno.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <string>
 
 using namespace std;
 
 struct iNodes{
-	char *name;
+	string name;
 	int size;
 	int direct[12];
 	int indirect;

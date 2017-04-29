@@ -18,4 +18,4 @@ ssfs.o:	ssfs.cpp
 
 
 clean:
-	rm ssfs_mkdsk *.o
+	rm ssfs ssfs_mkdsk *.o

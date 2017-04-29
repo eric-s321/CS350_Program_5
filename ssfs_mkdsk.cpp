@@ -4,8 +4,9 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdbool.h>
+#include <string>
 
-#define DEFAULT_FILE_NAME "DISK"
+#define DEFAULT_FILE_NAME "DISK";
 
 void printUsageAndExit(){
     fprintf(stderr, "ssfs_mkdsk <num blocks> <block size> <disk file name>\n");
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]){
 
     int numBlocks;
     int blockSize;
-    char *fileName;
+    std::string fileName;
 
     if(argc > 4 || argc < 3){
         fprintf(stderr, "Wrong number of arguments\n");
@@ -90,7 +91,7 @@ int main(int argc, char *argv[]){
     else
         fileName = DEFAULT_FILE_NAME; // use "DISK" if user does not supply file name
 
-    FILE *diskFile = fopen(fileName, "w");
+    FILE *diskFile = fopen(fileName.c_str(), "w");
     ftruncate(fileno(diskFile), numBlocks * blockSize);
     setupDisk(diskFile, numBlocks, blockSize);
     fclose(diskFile); 
