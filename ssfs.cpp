@@ -22,22 +22,72 @@ struct iNodes{
 void* threadops(void* commandFile);
 
 class DiskController{
-    
+        char *diskFileName;
+        int blockSize;
+        int numBlocks;
+        int startingByte;
+        int findStartingByte();
 
+    public:
+        DiskController(char *diskFileName);
 };
+
+DiskController::DiskController(char *diskFileName){
+    this->diskFileName = diskFileName;    
+
+    int blockSize;
+    int numBlocks;
+
+    FILE *diskFile = fopen(diskFileName, "r"); 
+    if(diskFile == NULL){
+        perror("Error opening disk file: ");
+		exit(EXIT_FAILURE);
+    }
+
+    int result;
+    result = fread(&numBlocks, sizeof(int), 1, diskFile);
+    if(result != 1){
+        perror("fread error: ");
+        exit(EXIT_FAILURE);
+    }
+    this->numBlocks = numBlocks;
+
+    result = fread(&blockSize, sizeof(int), 1, diskFile);
+    if(result != 1){
+        perror("fread error: ");
+        exit(EXIT_FAILURE);
+    }
+    this->blockSize = blockSize;
+
+    cout << "num blocks is " << this->numBlocks << endl;
+    cout << "block size is " << this->blockSize << endl;
+
+    fclose(diskFile);
+}
+
+//PLACEHOLDER FOR NOW. STILLS NEEDS TO BE IMPLEMENTED
+int DiskController::findStartingByte(){
+
+    return 0;
+}
+
+DiskController *diskController;   //Making global so it can be accessed by all threads
 
 int main(int argc, char** argv){
 	int s;
 	if (argc > 6 || argc < 3){
 		fprintf(stderr, "usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt\n");
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
+    
+    char *diskFileName = argv[1];
+    diskController = new DiskController(diskFileName);
+
 	int i;
 	char *filename;
 	for (i = 2; i < argc; i++){
 		pthread_t p;
 		filename = argv[i];
-        cout << "filename is " << filename << endl;
 		FILE *commandFile = fopen(filename, "r");
 		//send new thread to threadops
 		void* v = (void*)commandFile;
