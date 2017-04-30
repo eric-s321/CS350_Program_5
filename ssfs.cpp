@@ -6,10 +6,21 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <string>
+#include <fstream>
 #include <map>
 #include <iostream>
+#include <queue>
 
 using namespace std;
+
+struct command{
+	string commandName;
+	string fileName;
+	string unixFileName;
+	char charParameter;
+	int startByte;
+	int numBytes;
+};
 
 struct iNodes{
 	string name;
@@ -19,7 +30,7 @@ struct iNodes{
 	int indirect2x;
 } iNode;
 
-void* threadops(void* commandFile);
+void* diskOp(void* commandFile);
 
 class DiskController{
         char *diskFileName;
@@ -72,9 +83,10 @@ int DiskController::findStartingByte(){
 }
 
 DiskController *diskController;   //Making global so it can be accessed by all threads
+queue<struct command> waitingCommands;
 
 int main(int argc, char** argv){
-	int s;
+
 	if (argc > 6 || argc < 3){
 		fprintf(stderr, "usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt\n");
 		exit(EXIT_FAILURE);
@@ -82,23 +94,65 @@ int main(int argc, char** argv){
     
     char *diskFileName = argv[1];
     diskController = new DiskController(diskFileName);
-
 	int i;
 	char *filename;
+	pthread_t threads[4];
 	for (i = 2; i < argc; i++){
-		pthread_t p;
 		filename = argv[i];
-		FILE *commandFile = fopen(filename, "r");
 		//send new thread to threadops
-		void* v = (void*)commandFile;
-		s = pthread_create(&p,NULL,threadops,v);
+		void* v = (void*)filename;
+		pthread_create(&threads[i-2],NULL,diskOp,v);
+	}
+	for (int i = 0; i < argc-2; i++){
+		pthread_join(threads[i], NULL);
 	}
 }
 
-void* threadops(void* commandFile){
-	FILE* f = (FILE*)commandFile;
-	
-	//while (fscanf(f, "%s") != EOF){
-		
-	//}
+void* diskOp(void* commandFileName){
+	char* cstring = (char*)commandFileName;
+	printf("%s\n", cstring);
+	ifstream commandFile(cstring);
+	string commandString;
+	while (!commandFile.eof()){
+		struct command c;
+		commandFile >> c.commandName;
+		//prevents reading last line twice
+		if (!commandFile.eof()){
+			if (c.commandName.compare("CAT") == 0){
+				commandFile >> c.fileName;
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("CREATE") == 0){
+				commandFile >> c.fileName;
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("IMPORT") == 0){
+				commandFile >> c.fileName;
+				commandFile >> c.unixFileName;
+				waitingCommands.push(c);
+ 			} else if (c.commandName.compare("DELETE") == 0){
+				commandFile >> c.fileName;
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("WRITE") == 0){
+				commandFile >> c.fileName;
+				commandFile >> c.charParameter;
+				commandFile >> c.startByte;
+				commandFile >> c.numBytes;
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("READ") == 0){
+				commandFile >> c.fileName;
+				commandFile >> c.startByte;
+				commandFile >> c.numBytes;
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("LIST") == 0){
+				waitingCommands.push(c);
+			} else if (c.commandName.compare("SHUTDOWN") == 0){
+				waitingCommands.push(c);
+			}
+		}
+	}	
 }
+
+
+
+
+
+
