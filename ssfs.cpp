@@ -11,7 +11,11 @@
 #include <iostream>
 #include <queue>
 
+#define INODE_START 2 * sizeof(int) 
+#define FREE_BLOCK_START 258 * sizeof(int)
+
 using namespace std;
+
 
 struct command{
 	string commandName;
@@ -22,38 +26,35 @@ struct command{
 	int numBytes;
 };
 
-struct iNodes{
+
+struct iNode{
 	string name;
 	int size;
 	int direct[12];
 	int indirect;
 	int indirect2x;
-} iNode;
+};
 
 void* diskOp(void* commandFile);
 
 class DiskController{
-        char *diskFileName;
+        FILE *diskFile;
         int blockSize;
         int numBlocks;
         int startingByte;
         int findStartingByte();
 
     public:
-        DiskController(char *diskFileName);
+        DiskController(FILE *diskFile);
+        void create(string fileName);
+        void read(int idx);
 };
 
-DiskController::DiskController(char *diskFileName){
-    this->diskFileName = diskFileName;    
+DiskController::DiskController(FILE *diskFile){
+    this->diskFile = diskFile;
 
     int blockSize;
     int numBlocks;
-
-    FILE *diskFile = fopen(diskFileName, "r"); 
-    if(diskFile == NULL){
-        perror("Error opening disk file: ");
-		exit(EXIT_FAILURE);
-    }
 
     int result;
     result = fread(&numBlocks, sizeof(int), 1, diskFile);
@@ -70,16 +71,94 @@ DiskController::DiskController(char *diskFileName){
     }
     this->blockSize = blockSize;
 
+    this->startingByte = this->findStartingByte();
+
     cout << "num blocks is " << this->numBlocks << endl;
     cout << "block size is " << this->blockSize << endl;
+}
 
-    fclose(diskFile);
+void DiskController::create(string fileName){
+    if(fseek(this->diskFile,FREE_BLOCK_START,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+    int8_t block;
+    int blockIndex = -1;
+    do{
+        int result = fread(&block, sizeof(int8_t), 1, this->diskFile);
+        if(result != 1){
+            perror("fread error: ");
+            exit(EXIT_FAILURE);
+        }
+        blockIndex++;
+    }while(block != -1);
+
+    int blockAddress = FREE_BLOCK_START + blockIndex * sizeof(int8_t); 
+    fseek(this->diskFile,blockAddress,SEEK_SET);
+    int usingBlock = 1;
+    fwrite(&usingBlock, sizeof(int8_t), 1, this->diskFile);
+    
+    fseek(this->diskFile,INODE_START,SEEK_SET);
+    int inodeBlock;
+    int inodeIndex = -1;
+    do{
+        int result = fread(&inodeBlock, sizeof(int), 1, this->diskFile);
+        if(result != 1){
+            perror("fread error: ");
+            exit(EXIT_FAILURE);
+        }
+        inodeIndex++;
+    }while(inodeBlock != -1);
+
+    int inodeAddress = INODE_START + inodeIndex * sizeof(int); 
+    int freeBlockAddress = this->startingByte + blockIndex * sizeof(int8_t);
+    fseek(this->diskFile,inodeAddress,SEEK_SET);
+    fwrite(&freeBlockAddress, sizeof(int), 1, this->diskFile);
+
+    fseek(this->diskFile, freeBlockAddress, SEEK_SET);
+    iNode inode;
+    inode.name = fileName;
+    inode.size = 0;
+    fwrite(&inode, sizeof(inode), 1, this->diskFile);
+
+	//TODO add filename and index to map
+
+}
+
+void DiskController::read(int idx){
+ 	 int inodeAddress = INODE_START + idx * sizeof(int);
+    if(fseek(this->diskFile,inodeAddress,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+    int blockAddress;
+	int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+
+	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+
+	iNode *inode = new iNode();
+	result = fread(inode, sizeof(iNode), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+
+	cout << "FileName: " << inode->name << endl; 
+	cout << "FileSize: " << inode->size << endl; 
+
+
 }
 
 //PLACEHOLDER FOR NOW. STILLS NEEDS TO BE IMPLEMENTED
 int DiskController::findStartingByte(){
-
-    return 0;
+    return FREE_BLOCK_START + this->numBlocks * sizeof(int8_t);
 }
 
 DiskController *diskController;   //Making global so it can be accessed by all threads
@@ -93,7 +172,18 @@ int main(int argc, char** argv){
 	}
     
     char *diskFileName = argv[1];
-    diskController = new DiskController(diskFileName);
+
+    FILE *diskFile = fopen(diskFileName, "rb+"); 
+    if(diskFile == NULL){
+        perror("Error opening disk file: ");
+		exit(EXIT_FAILURE);
+    }
+
+    diskController = new DiskController(diskFile);
+    diskController->create("test");
+	diskController->read(0);
+	cout << "Here" << endl;
+
 	int i;
 	char *filename;
 	pthread_t threads[4];
@@ -149,6 +239,7 @@ void* diskOp(void* commandFileName){
 			}
 		}
 	}	
+	return NULL;
 }
 
 

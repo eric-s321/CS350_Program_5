@@ -27,13 +27,13 @@ void setupDisk(FILE *diskFile, int numBlocks, int blockSize){
     bytesWritten += sizeof(int);
 
     int inodesLeft = 256;
-    int8_t inodeInt = -1;
+    int32_t inodeInt = -1;
     bool stuffLeftInBuffer = false;
 
     //Set all 256 inodes to -1 to indicate they have no file in disk right now
     while(inodesLeft > 0){
-        memcpy(buffer + bytesWritten, &inodeInt, sizeof(int8_t)); 
-        bytesWritten += sizeof(int8_t);
+        memcpy(buffer + bytesWritten, &inodeInt, sizeof(int32_t)); 
+        bytesWritten += sizeof(int32_t);
         inodesLeft -= 1;
         stuffLeftInBuffer = true;
 
