@@ -112,21 +112,24 @@ void DiskController::create(string fileName){
 
     int inodeAddress = INODE_START + inodeIndex * sizeof(int); 
     int freeBlockAddress = this->startingByte + blockIndex * sizeof(int8_t);
+    cout << "starting byte is " << this->startingByte << endl;
     fseek(this->diskFile,inodeAddress,SEEK_SET);
     fwrite(&freeBlockAddress, sizeof(int), 1, this->diskFile);
 
     fseek(this->diskFile, freeBlockAddress, SEEK_SET);
-    iNode inode;
-    inode.name = fileName;
-    inode.size = 0;
-    fwrite(&inode, sizeof(inode), 1, this->diskFile);
+    iNode *inode = new iNode();
+    inode->name = fileName;
+    inode->size = 0;
+    fwrite(inode, sizeof(inode), 1, this->diskFile);
 
 	//TODO add filename and index to map
 
 }
 
 void DiskController::read(int idx){
- 	 int inodeAddress = INODE_START + idx * sizeof(int);
+ 	int inodeAddress = INODE_START + idx * sizeof(int);
+    cout << "inode add " << inodeAddress << endl;
+
     if(fseek(this->diskFile,inodeAddress,SEEK_SET) != 0){
         perror("fseek failed: ");
         exit(EXIT_FAILURE);
@@ -137,6 +140,7 @@ void DiskController::read(int idx){
 		perror("fread error: ");
 		exit(EXIT_FAILURE);
 	}
+    cout << "block add " << blockAddress << endl;
 
 	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
         perror("fseek failed: ");
