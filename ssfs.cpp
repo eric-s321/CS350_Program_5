@@ -250,42 +250,73 @@ int DiskController::getFirstFreeBlock(){
 
 void DiskController::read(string fileName, int startByte, int numBytes){
 	cout << "\nIN READ" << endl;
+	int endByte = startByte + numBytes;
 	iNode *inode = this->fileNameToInode(fileName);
-	if(inode->size < startByte){
+	if(endByte > inode->size){
         fprintf(stderr, "Error: trying to read to byte %d in a file of size %d\n", startByte, inode->size);
     }
+	else{
+		int bytesLeft = numBytes;
+		int blockIdx = startByte/this->blockSize;
+		int blockByte = startByte%this->blockSize;
+		int blockAddress = (blockIdx > 12? -1: inode->direct[blockIdx]) + blockByte;//TODO indirect and dIndirect blocks
 	
-	// cout << "iNode size: " << inode->size << endl;
-	// cout << "iNode direct: [";
-	// for(int i=0; i<12; i++) {
-		// if (i > 0) cout << ",";
-		// cout << inode->direct[i];
-	// }
-	// cout << "]" << endl;
-	
-	int blockIdx = startByte/this->blockSize;
-	int blockByte = startByte%this->blockSize;
-	cout << "iNode block " << blockIdx << " at blockByte "<< blockByte << endl;
-	
-	int blockAddress = blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
-	
-	cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
-	
-	if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
-        perror("fseek failed: ");
-        exit(EXIT_FAILURE);
-    }
-
-	while (blockByte < this->blockSize && blockByte < numBytes) { // TODO fix this not numBytes
-		char c;
-		int result = fread(&c, sizeof(char), 1, this->diskFile);
-		if(result != 1){
-			perror("fread error: ");
+		cout << "iNode size: " << inode->size << endl;
+		// cout << "iNode direct: [";
+		// for(int i=0; i<12; i++) {
+			// if (i > 0) cout << ",";
+			// cout << inode->direct[i];
+		// }
+		// cout << "]" << endl;
+		cout << "iNode block " << blockIdx << " at blockByte "<< blockByte << endl;
+		cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+		
+		// ***Read by block
+		// while(bytesLeft > 0) {
+			// if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+				// perror("fseek failed: ");
+				// exit(EXIT_FAILURE);
+			// }
+			// int size = bytesLeft < this->blockSize? bytesLeft:this->blockSize - blockByte;
+			// char *str = (char *) calloc(size, sizeof(char));
+			// int result = fread(str, sizeof(char), size, this->diskFile);
+			// if(result != size){
+				// perror("fread error: ");
+				// exit(EXIT_FAILURE);
+			// }
+			// cout << str;
+			// free(str);
+			// bytesLeft-=size;
+			// blockIdx++;
+			// blockAddress = blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
+		// }
+		
+		// ***Read by char
+		if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+			perror("fseek failed: ");
 			exit(EXIT_FAILURE);
 		}
-		cout << c;
-		blockByte++;
+		while(bytesLeft > 0) {
+			char c;
+			int result = fread(&c, sizeof(char), 1, this->diskFile);
+			if(result != 1){
+				perror("fread error: ");
+				exit(EXIT_FAILURE);
+			}
+			cout << c;
+			blockByte++;
+			bytesLeft--;
+			if (blockByte == this->blockSize) {
+				blockAddress = ++blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
+				blockByte = 0;
+				if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+					perror("fseek failed: ");
+					exit(EXIT_FAILURE);
+				}
+			}
+		}
 	}
+	
 	cout << endl;
 }
 
@@ -393,8 +424,8 @@ int main(int argc, char** argv){
     diskController->create("test");
     diskController->create("Eric");
 	diskController->read(0);
-    diskController->write("test", 'a', 0, 10);
-    diskController->read("test", 0, 10);
+    diskController->write("test", 'a', 0, 278);
+    diskController->read("test", 118, 129);
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
