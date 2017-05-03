@@ -49,6 +49,9 @@ class DiskController{
         DiskController(FILE *diskFile);
         void create(string fileName);
         void read(int idx);
+        iNode* fileNameToInode(string fileName);
+        void write(string fileName, char letter, int startByte, int numBytes); 
+        void import(string unixFileName);
 };
 
 DiskController::DiskController(FILE *diskFile){
@@ -119,8 +122,7 @@ void DiskController::create(string fileName){
     inode->size = 0;
     fwrite(inode, sizeof(inode), 1, this->diskFile);
 
-	//TODO add filename and index to map
-    inodeIndexMap[fileName] = inodeIndex;
+    this->inodeIndexMap[fileName] = inodeIndex; //Add new file to map
     cout << "just mapped " << fileName << " to " << inodeIndexMap[fileName] << endl;
 
 }
@@ -153,10 +155,71 @@ void DiskController::read(int idx){
 
 	cout << "FileName: " << inode->name << endl; 
 	cout << "FileSize: " << inode->size << endl; 
+}
+
+//Move file pointer to the inode location of the filename and return the inode struct
+iNode* DiskController::fileNameToInode(string fileName){
+    if(this->inodeIndexMap.find(fileName) == this->inodeIndexMap.end()){//File not yet created 
+        fprintf(stderr, "Error: file does not exist\n");
+        return NULL;
+    }
+
+    int index = this->inodeIndexMap[fileName];
+ 	int inodeAddress = INODE_START + index * sizeof(int);
+
+    if(fseek(this->diskFile,inodeAddress,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+
+    int blockAddress;
+	int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+
+	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+
+	iNode *inode = new iNode();
+	result = fread(inode, sizeof(iNode), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+
+    return inode;
+}
+
+void DiskController::write(string fileName, char letter, int startByte, int numBytes){
+    iNode *inode = this->fileNameToInode(fileName);
+    if(inode == NULL)
+        return;
+    if(inode->size < startByte){
+        fprintf(stderr, "Error: trying to write to byte %d in a file of size %d\n", startByte, inode->size);
+        return;
+    }
+
+    if(inode->size < startByte + numBytes){ //Need to append to end of file
+
+    }
+    
+}
+
+void DiskController::import(string unixFileName){
+    if(this->inodeIndexMap.find(unixFileName) == this->inodeIndexMap.end()){//File does not exist already
+        cout << "File not found "<< endl;
+    }
+    else{  //File already exists - overwrite 
+        int index = this->inodeIndexMap[unixFileName];
+        cout << "File exists and index is " << index << endl;
+    }
 
 }
 
-//PLACEHOLDER FOR NOW. STILLS NEEDS TO BE IMPLEMENTED
 int DiskController::findStartingByte(){
     return FREE_BLOCK_START + this->numBlocks * sizeof(int8_t);
 }
@@ -184,6 +247,11 @@ int main(int argc, char** argv){
     diskController->create("Eric");
 	diskController->read(0);
     diskController->read(1);
+//    diskController->import("test");
+//    diskController->import("blah");
+
+//void DiskController::write(string fileName, char letter, int startByte, int numBytes){
+    diskController->write("test", 'a', 0, 10);
 
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
 /*
