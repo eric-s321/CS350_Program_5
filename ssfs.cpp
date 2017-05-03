@@ -16,7 +16,6 @@
 
 using namespace std;
 
-
 struct command{
 	string commandName;
 	string fileName;
@@ -27,12 +26,14 @@ struct command{
 };
 
 
+//Needed to change to name to a char[] because C++ stores strings as pointers to heap space - this was messing up write and reads
+//Moved named[] to the bottom because of padding issues
 struct iNode{
-	string name;
-	int size;
 	int direct[12];
 	int indirect;
 	int indirect2x;
+	int size;
+	char name[32];
 };
 
 void* diskOp(void* commandFile);
@@ -121,7 +122,8 @@ void DiskController::create(string fileName){
 
     fseek(this->diskFile, freeBlockAddress, SEEK_SET);
     iNode *inode = new iNode();
-    inode->name = fileName;
+    strcpy(inode->name, fileName.c_str());
+    //inode->name = fileName;
     inode->size = 0;
     
     //Mark all data blocks and indirect blocks as unused
@@ -131,7 +133,8 @@ void DiskController::create(string fileName){
     inode->indirect = -1;
     inode->indirect2x = -1;
     
-    fwrite(inode, sizeof(inode), 1, this->diskFile);
+    //Useing iNode because we want the size of the struct!
+    fwrite(inode, sizeof(iNode), 1, this->diskFile);
     cout << "writing to block " << freeBlockAddress << endl;
 
     this->inodeIndexMap[fileName] = inodeIndex; //Add new file to map
@@ -238,6 +241,7 @@ int DiskController::getFirstFreeBlock(){
 //NOT FINISHED
 void DiskController::write(string fileName, char letter, int startByte, int numBytes){
     iNode *inode = this->fileNameToInode(fileName);
+    FILE *inodeLocation = this->diskFile;
     if(inode == NULL)
         return;
     if(inode->size < startByte){
@@ -259,10 +263,9 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
         while(numBytesLeft > 0){
             for(int i = 0; i < 12; i++){
-                cout << "in for loop " << endl;
                 if(inode->direct[i] == -1){
-                    cout << "FOUND -1 " << endl;
                     inode->direct[i] = freeBlockAddress; //Update inode to where we are writing data to
+                    cout << "wrote new block address" << endl;
                     break;
                 }
             }         
@@ -282,6 +285,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                 numBytesLeft = 0;
             }
         }
+        fwrite(inode, sizeof(iNode), 1, inodeLocation);
     }
 }
 
