@@ -52,8 +52,10 @@ class DiskController{
         void read(int idx);
         iNode* fileNameToInode(string fileName);
         int getFirstFreeBlock();
+		void read(string fileName, int startByte, int numBytes);
         void write(string fileName, char letter, int startByte, int numBytes); 
         void import(string unixFileName);
+		void updateINode(iNode* inode);
 };
 
 DiskController::DiskController(FILE *diskFile){
@@ -203,6 +205,13 @@ iNode* DiskController::fileNameToInode(string fileName){
 		perror("fread error: ");
 		exit(EXIT_FAILURE);
 	}
+	
+	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+	
+	cout << "File \"" << fileName << "\" inode at block address: " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 
     return inode;
 }
@@ -238,10 +247,52 @@ int DiskController::getFirstFreeBlock(){
     return freeBlockAddress;
 }
 
+
+void DiskController::read(string fileName, int startByte, int numBytes){
+	cout << "\nIN READ" << endl;
+	iNode *inode = this->fileNameToInode(fileName);
+	if(inode->size < startByte){
+        fprintf(stderr, "Error: trying to read to byte %d in a file of size %d\n", startByte, inode->size);
+    }
+	
+	// cout << "iNode size: " << inode->size << endl;
+	// cout << "iNode direct: [";
+	// for(int i=0; i<12; i++) {
+		// if (i > 0) cout << ",";
+		// cout << inode->direct[i];
+	// }
+	// cout << "]" << endl;
+	
+	int blockIdx = startByte/this->blockSize;
+	int blockByte = startByte%this->blockSize;
+	cout << "iNode block " << blockIdx << " at blockByte "<< blockByte << endl;
+	
+	int blockAddress = blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
+	
+	cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+	
+	if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+
+	while (blockByte < this->blockSize && blockByte < numBytes) { // TODO fix this not numBytes
+		char c;
+		int result = fread(&c, sizeof(char), 1, this->diskFile);
+		if(result != 1){
+			perror("fread error: ");
+			exit(EXIT_FAILURE);
+		}
+		cout << c;
+		blockByte++;
+	}
+	cout << endl;
+}
+
 //NOT FINISHED
 void DiskController::write(string fileName, char letter, int startByte, int numBytes){
+	cout << "\nIN WRITE" << endl;
     iNode *inode = this->fileNameToInode(fileName);
-    FILE *inodeLocation = this->diskFile;
     if(inode == NULL)
         return;
     if(inode->size < startByte){
@@ -249,22 +300,24 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
         return;
     }
 
-    //NOT DONE
-    if(inode->size >= startByte + numBytes){ //Enough space to overwrite existing file 
-        int freeBlockAddress = this->getFirstFreeBlock();
-        cout << "First free block is " << freeBlockAddress << endl;
+    //NOT DONE *** what if part overwrite and part append?
+    if(inode->size >= startByte + numBytes){ //Enough space to overwrite file 
+		cout << "Overwrite File" << endl;
+        // int freeBlockAddress = this->getFirstFreeBlock();
+        // cout << "First free block is " << freeBlockAddress << endl;
     }
 
     else{ //Need to append
-        cout << "Appending file" << endl;
+        cout << "Append file" << endl;
         int numBytesLeft = numBytes;
         int freeBlockAddress = this->getFirstFreeBlock();
-        cout << "First free block is " << freeBlockAddress << endl;
+        cout << "First free block at address " << freeBlockAddress << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 
         while(numBytesLeft > 0){
+			// Find free block and add free block to inode
             for(int i = 0; i < 12; i++){
                 if(inode->direct[i] == -1){
-                    inode->direct[i] = freeBlockAddress; //Update inode to where we are writing data to
+                    inode->direct[i] = freeBlockAddress; 
                     cout << "wrote new block address" << endl;
                     break;
                 }
@@ -272,7 +325,11 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
             //TODO if all direct blocks were full use the indirect block
             
             if(numBytesLeft >= this->blockSize){ //Can fill an entire block
-                fwrite(&letter, sizeof(char), this->blockSize, this->diskFile);
+				// NOTE: fwrite(ptr, size, count, stream) where count is the size of the array that ptr points to
+                // fwrite(&letter, sizeof(char), this->blockSize, this->diskFile);
+				for (int i=0; i<this->blockSize; i++) {
+					fwrite(&letter, sizeof(char), 1, this->diskFile);
+				}
                 numBytesLeft -= this->blockSize;
                 inode->size += blockSize;
                 continue;
@@ -280,12 +337,22 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
             else{ 
                 cout << "In the else writing " << numBytesLeft << " bytes" <<  endl;
-                fwrite(&letter, sizeof(char), numBytesLeft, this->diskFile);
+				// NOTE: fwrite(ptr, size, count, stream) where count is the size of the array that ptr points to
+                // fwrite(&letter, sizeof(char), numBytesLeft, this->diskFile);
+				for (int i=0; i<numBytesLeft; i++) {
+					fwrite(&letter, sizeof(char), 1, this->diskFile);
+				}
                 inode->size += numBytesLeft;
                 numBytesLeft = 0;
             }
         }
-        fwrite(inode, sizeof(iNode), 1, inodeLocation);
+		// Update iNode *****TODO need iNode location maybe iNode stores it? or call find iNode differently?
+		int iNodeAddress = 2056;
+		if(fseek(this->diskFile, iNodeAddress, SEEK_SET) != 0){
+			perror("fseek failed: ");
+			exit(EXIT_FAILURE);
+		}
+        fwrite(inode, sizeof(iNode), 1, this->diskFile);
     }
 }
 
@@ -327,7 +394,7 @@ int main(int argc, char** argv){
     diskController->create("Eric");
 	diskController->read(0);
     diskController->write("test", 'a', 0, 10);
-	diskController->read(0);
+    diskController->read("test", 0, 10);
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
