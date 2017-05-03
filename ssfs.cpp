@@ -42,6 +42,7 @@ class DiskController{
         int blockSize;
         int numBlocks;
         int startingByte;
+        map<string, int>inodeIndexMap;
         int findStartingByte();
 
     public:
@@ -72,9 +73,6 @@ DiskController::DiskController(FILE *diskFile){
     this->blockSize = blockSize;
 
     this->startingByte = this->findStartingByte();
-
-    cout << "num blocks is " << this->numBlocks << endl;
-    cout << "block size is " << this->blockSize << endl;
 }
 
 void DiskController::create(string fileName){
@@ -95,7 +93,7 @@ void DiskController::create(string fileName){
 
     int blockAddress = FREE_BLOCK_START + blockIndex * sizeof(int8_t); 
     fseek(this->diskFile,blockAddress,SEEK_SET);
-    int usingBlock = 1;
+    int8_t usingBlock = 1;
     fwrite(&usingBlock, sizeof(int8_t), 1, this->diskFile);
     
     fseek(this->diskFile,INODE_START,SEEK_SET);
@@ -111,8 +109,7 @@ void DiskController::create(string fileName){
     }while(inodeBlock != -1);
 
     int inodeAddress = INODE_START + inodeIndex * sizeof(int); 
-    int freeBlockAddress = this->startingByte + blockIndex * sizeof(int8_t);
-    cout << "starting byte is " << this->startingByte << endl;
+    int freeBlockAddress = this->startingByte + blockIndex * this->blockSize;
     fseek(this->diskFile,inodeAddress,SEEK_SET);
     fwrite(&freeBlockAddress, sizeof(int), 1, this->diskFile);
 
@@ -123,12 +120,13 @@ void DiskController::create(string fileName){
     fwrite(inode, sizeof(inode), 1, this->diskFile);
 
 	//TODO add filename and index to map
+    inodeIndexMap[fileName] = inodeIndex;
+    cout << "just mapped " << fileName << " to " << inodeIndexMap[fileName] << endl;
 
 }
 
 void DiskController::read(int idx){
  	int inodeAddress = INODE_START + idx * sizeof(int);
-    cout << "inode add " << inodeAddress << endl;
 
     if(fseek(this->diskFile,inodeAddress,SEEK_SET) != 0){
         perror("fseek failed: ");
@@ -140,7 +138,6 @@ void DiskController::read(int idx){
 		perror("fread error: ");
 		exit(EXIT_FAILURE);
 	}
-    cout << "block add " << blockAddress << endl;
 
 	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
         perror("fseek failed: ");
@@ -156,7 +153,6 @@ void DiskController::read(int idx){
 
 	cout << "FileName: " << inode->name << endl; 
 	cout << "FileSize: " << inode->size << endl; 
-
 
 }
 
@@ -185,9 +181,12 @@ int main(int argc, char** argv){
 
     diskController = new DiskController(diskFile);
     diskController->create("test");
+    diskController->create("Eric");
 	diskController->read(0);
-	cout << "Here" << endl;
+    diskController->read(1);
 
+//Commented this out because it was getting stuck while parsing. Didn't change anything here
+/*
 	int i;
 	char *filename;
 	pthread_t threads[4];
@@ -200,6 +199,7 @@ int main(int argc, char** argv){
 	for (int i = 0; i < argc-2; i++){
 		pthread_join(threads[i], NULL);
 	}
+*/
 }
 
 void* diskOp(void* commandFileName){
