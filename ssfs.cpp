@@ -50,6 +50,7 @@ class DiskController{
         void create(string fileName);
         void read(int idx);
         iNode* fileNameToInode(string fileName);
+        int getFirstFreeBlock();
         void write(string fileName, char letter, int startByte, int numBytes); 
         void import(string unixFileName);
 };
@@ -77,6 +78,8 @@ DiskController::DiskController(FILE *diskFile){
 
     this->startingByte = this->findStartingByte();
 }
+
+
 
 void DiskController::create(string fileName){
     if(fseek(this->diskFile,FREE_BLOCK_START,SEEK_SET) != 0){
@@ -120,11 +123,18 @@ void DiskController::create(string fileName){
     iNode *inode = new iNode();
     inode->name = fileName;
     inode->size = 0;
+    
+    //Mark all data blocks and indirect blocks as unused
+    for(int i = 0; i < 12; i++){
+        inode->direct[i] = -1;
+    }
+    inode->indirect = -1;
+    inode->indirect2x = -1;
+    
     fwrite(inode, sizeof(inode), 1, this->diskFile);
+    cout << "writing to block " << freeBlockAddress << endl;
 
     this->inodeIndexMap[fileName] = inodeIndex; //Add new file to map
-    cout << "just mapped " << fileName << " to " << inodeIndexMap[fileName] << endl;
-
 }
 
 void DiskController::read(int idx){
@@ -194,6 +204,38 @@ iNode* DiskController::fileNameToInode(string fileName){
     return inode;
 }
 
+//Move file pointer to the first free block and sets that block as used in the free block byte map
+//returns the byte of the block so it can be added to the inode
+int DiskController::getFirstFreeBlock(){
+    if(fseek(this->diskFile,FREE_BLOCK_START,SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+    int8_t block;
+    int blockIndex = -1;
+    do{
+        int result = fread(&block, sizeof(int8_t), 1, this->diskFile);
+        if(result != 1){
+            perror("fread error: ");
+            exit(EXIT_FAILURE);
+        }
+        blockIndex++;
+    }while(block != -1);
+
+    int blockAddress = FREE_BLOCK_START + blockIndex * sizeof(int8_t);
+    fseek(this->diskFile,blockAddress,SEEK_SET);
+    int8_t usingBlock = 1;
+    fwrite(&usingBlock, sizeof(int8_t), 1, this->diskFile);
+
+    int freeBlockAddress = this->startingByte + blockIndex * this->blockSize;
+    if(fseek(this->diskFile, freeBlockAddress, SEEK_SET) != 0){
+        perror("fseek failed: ");
+        exit(EXIT_FAILURE);
+    }
+    return freeBlockAddress;
+}
+
+//NOT FINISHED
 void DiskController::write(string fileName, char letter, int startByte, int numBytes){
     iNode *inode = this->fileNameToInode(fileName);
     if(inode == NULL)
@@ -203,10 +245,44 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
         return;
     }
 
-    if(inode->size < startByte + numBytes){ //Need to append to end of file
-
+    //NOT DONE
+    if(inode->size >= startByte + numBytes){ //Enough space to overwrite existing file 
+        int freeBlockAddress = this->getFirstFreeBlock();
+        cout << "First free block is " << freeBlockAddress << endl;
     }
-    
+
+    else{ //Need to append
+        cout << "Appending file" << endl;
+        int numBytesLeft = numBytes;
+        int freeBlockAddress = this->getFirstFreeBlock();
+        cout << "First free block is " << freeBlockAddress << endl;
+
+        while(numBytesLeft > 0){
+            for(int i = 0; i < 12; i++){
+                cout << "in for loop " << endl;
+                if(inode->direct[i] == -1){
+                    cout << "FOUND -1 " << endl;
+                    inode->direct[i] = freeBlockAddress; //Update inode to where we are writing data to
+                    break;
+                }
+            }         
+            //TODO if all direct blocks were full use the indirect block
+            
+            if(numBytesLeft >= this->blockSize){ //Can fill an entire block
+                fwrite(&letter, sizeof(char), this->blockSize, this->diskFile);
+                numBytesLeft -= this->blockSize;
+                inode->size += blockSize;
+                continue;
+            }
+
+            else{ 
+                cout << "In the else writing " << numBytesLeft << " bytes" <<  endl;
+                fwrite(&letter, sizeof(char), numBytesLeft, this->diskFile);
+                inode->size += numBytesLeft;
+                numBytesLeft = 0;
+            }
+        }
+    }
 }
 
 void DiskController::import(string unixFileName){
@@ -246,12 +322,12 @@ int main(int argc, char** argv){
     diskController->create("test");
     diskController->create("Eric");
 	diskController->read(0);
-    diskController->read(1);
+    diskController->write("test", 'a', 0, 10);
+	diskController->read(0);
+//    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
 
-//void DiskController::write(string fileName, char letter, int startByte, int numBytes){
-    diskController->write("test", 'a', 0, 10);
 
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
 /*
@@ -313,9 +389,4 @@ void* diskOp(void* commandFileName){
 	}	
 	return NULL;
 }
-
-
-
-
-
 
