@@ -53,7 +53,9 @@ class DiskController{
     public:
         DiskController(FILE *diskFile);
         void create(string fileName);
+	void list();
         void read(int idx);
+	void cat(string fileName);
         iNodeWithAddress* fileNameToInode(string fileName);
         int getFirstFreeBlock();
 		void read(string fileName, int startByte, int numBytes);
@@ -86,7 +88,13 @@ DiskController::DiskController(FILE *diskFile){
     this->startingByte = this->findStartingByte();
 }
 
-
+void DiskController::cat(string fileName){
+	iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
+	int startByte = 0;
+	iNode* inode = inodeWithAddress -> inode;
+	int numBytes = inode -> size;
+	read(fileName, startByte, numBytes);
+}
 
 void DiskController::create(string fileName){
     if(fseek(this->diskFile,FREE_BLOCK_START,SEEK_SET) != 0){
@@ -176,6 +184,45 @@ void DiskController::read(int idx){
 	cout << "FileSize: " << inode->size << endl; 
 }
 
+void DiskController::list(){
+	int inodeAddress = INODE_START;
+
+	for (int i = 0; i < 256; i++){
+		if (fseek(this-> diskFile, inodeAddress, SEEK_SET) != 0){
+			perror("fseek failed: ");
+        		exit(EXIT_FAILURE);
+		}
+		int blockAddress;
+		//read the inode address
+		int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
+		if(result != 1){
+			perror("fread error: ");
+			exit(EXIT_FAILURE);
+		}
+		//if inode exists
+		if (blockAddress != -1){
+			//seek to inode
+			if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
+       				perror("fseek failed: ");
+        			exit(EXIT_FAILURE);
+    			}
+			//read in inode
+			iNode *inode = new iNode();
+			result = fread(inode, sizeof(iNode), 1, this->diskFile);
+			if(result != 1){
+				perror("fread error: ");
+				exit(EXIT_FAILURE);
+			}
+			char n[32];
+			for (int i = 0; i < 32; i++){
+				n[i] = inode -> name[i];
+			}
+			cout << n << endl;
+		}
+		inodeAddress += sizeof(int);
+	}	
+}
+
 //Move file pointer to the inode location of the filename and return the inode struct
 iNodeWithAddress* DiskController::fileNameToInode(string fileName){
     if(this->inodeIndexMap.find(fileName) == this->inodeIndexMap.end()){//File not yet created 
@@ -204,6 +251,7 @@ iNodeWithAddress* DiskController::fileNameToInode(string fileName){
     }
 
 	iNode *inode = new iNode();
+//
 	result = fread(inode, sizeof(iNode), 1, this->diskFile);
 	if(result != 1){
 		perror("fread error: ");
@@ -461,6 +509,7 @@ int DiskController::findStartingByte(){
 DiskController *diskController;   //Making global so it can be accessed by all threads
 queue<struct command> waitingCommands;
 
+
 int main(int argc, char** argv){
 
 	if (argc > 6 || argc < 3){
@@ -480,16 +529,18 @@ int main(int argc, char** argv){
 
     diskController->create("test");
     diskController->create("Eric");
-	diskController->read(0);
-    diskController->write("test", 'a', 0, 128);
-    diskController->read("test", 0, 128);
-    diskController->write("test", 'b', 125,20);
-    diskController->read("test", 120, 145);
+	diskController->create("listTest");
+	//diskController->read(0);
+    diskController->write("test", 'a', 0, 5);
+    //diskController->read("test", 0, 128);
+    diskController->write("test", 'b', 5,3);
+	diskController -> cat("test");
+    //diskController->read("test", 120, 145);
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
-
-
+	diskController -> list();
+	
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
 /*
 	int i;
@@ -545,7 +596,7 @@ void* diskOp(void* commandFileName){
 				waitingCommands.push(c);
 			} else if (c.commandName.compare("SHUTDOWN") == 0){
 				waitingCommands.push(c);
-			}
+			} 
 		}
 	}	
 	return NULL;
