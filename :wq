@@ -335,6 +335,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 	cout << "\nIN WRITE" << endl;
     iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
     iNode *inode = inodeWithAddress->inode;
+    //iNode *inode = this->fileNameToInode(fileName);
     if(inode == NULL)
         return;
     if(inode->size < startByte){
@@ -388,7 +389,6 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                 inode->size += numBytesLeft;
                 numBytesLeft = 0;
             }
-            freeBlockAddress = this->getFirstFreeBlock(); //Get the next free block address
         }
         
 		// Update iNode 
