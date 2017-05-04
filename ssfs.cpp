@@ -403,8 +403,17 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
     //NOT DONE *** what if part overwrite and part append?
     if(inode->size >= startByte + numBytes){ //Enough space to overwrite file 
 		cout << "Overwrite File" << endl;
-        // int freeBlockAddress = this->getFirstFreeBlock();
-        // cout << "First free block is " << freeBlockAddress << endl;
+        int blockNumber = (int) startByte / this->blockSize; 
+        int byteNumber = startByte % this->blockSize;
+        cout << "Writing to block " << blockNumber << " at byte " << byteNumber << endl;
+        int startAddress = inode->direct[blockNumber] + byteNumber;
+		if(fseek(this->diskFile, startAddress, SEEK_SET) != 0){
+			perror("fseek failed: ");
+			exit(EXIT_FAILURE);
+		}
+		for (int i=0; i<numBytes; i++) {
+			fwrite(&letter, sizeof(char), 1, this->diskFile);
+		}
     }
 
     else{ //Need to append
@@ -418,12 +427,11 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
             for(int i = 0; i < 12; i++){
                 if(inode->direct[i] == -1){
                     inode->direct[i] = freeBlockAddress; 
-                    cout << "wrote new block address" << endl;
                     break;
                 }
             }         
             //TODO if all direct blocks were full use the indirect block
-            
+             
             if(numBytesLeft >= this->blockSize){ //Can fill an entire block
 				// NOTE: fwrite(ptr, size, count, stream) where count is the size of the array that ptr points to
                 // fwrite(&letter, sizeof(char), this->blockSize, this->diskFile);
@@ -497,7 +505,8 @@ int main(int argc, char** argv){
     diskController->create("Eric");
 	diskController->read(0);
     diskController->write("test", 'a', 0, 266);
-    diskController->read("test", 0, 278);
+    diskController->write("test", 'b', 5, 10);
+    diskController->read("test", 0, 20);
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
@@ -563,4 +572,3 @@ void* diskOp(void* commandFileName){
 	}	
 	return NULL;
 }
-
