@@ -334,9 +334,10 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 void DiskController::write(string fileName, char letter, int startByte, int numBytes){
 	cout << "\nIN WRITE" << endl;
     iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
-    iNode *inode = inodeWithAddress->inode;
-    if(inode == NULL)
+    if(inodeWithAddress == NULL)
         return;
+
+    iNode *inode = inodeWithAddress->inode;
     if(inode->size < startByte){
         fprintf(stderr, "Error: trying to write to byte %d in a file of size %d\n", startByte, inode->size);
         return;
@@ -375,7 +376,6 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 				}
                 numBytesLeft -= this->blockSize;
                 inode->size += blockSize;
-                continue;
             }
 
             else{ 
@@ -435,11 +435,13 @@ int main(int argc, char** argv){
     }
 
     diskController = new DiskController(diskFile);
+
     diskController->create("test");
     diskController->create("Eric");
 	diskController->read(0);
     diskController->write("test", 'a', 0, 278);
     diskController->read("test", 118, 129);
+
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
