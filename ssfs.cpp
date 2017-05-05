@@ -60,6 +60,7 @@ class DiskController{
         void write(string fileName, char letter, int startByte, int numBytes); 
         void import(string unixFileName);
 		int getBlockIndirect(int address, int blockOffset);
+		void deleteFile(string fileName);
 };
 
 DiskController::DiskController(FILE *diskFile){
@@ -144,6 +145,85 @@ void DiskController::create(string fileName){
     cout << "writing to block " << freeBlockAddress << endl;
 
     this->inodeIndexMap[fileName] = inodeIndex; //Add new file to map
+}
+
+// May not work, use at your own risk
+void DiskController::deleteFile(string fileName){
+	iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
+    if(inodeWithAddress != NULL) {
+		iNode *inode = inodeWithAddress->inode;
+		int totalBlocks = inode->size/this->blockSize;
+		int indirectSize = this->blockSize/sizeof(int);
+		int indirectAddr = inode->indirect;
+		bool indirect = false;
+		int iNodeBlockNum = 0;
+		char freeBlock = -1;
+		while(iNodeBlockNum < totalBlocks) {
+			int blockAddress = -1;
+			if(indirect){
+				// If double indirect get next indirect block
+				if(iNodeBlockNum != 0 && iNodeBlockNum % indirectSize == 0){
+					// Free previous indirect block
+					int diskBlockNum = FREE_BLOCK_START + (indirectAddr - startingByte)/this->blockSize;
+					if(fseek(this->diskFile, diskBlockNum, SEEK_SET) != 0){
+						perror("Read fseek error: ");
+						exit(EXIT_FAILURE);
+					}
+					fwrite(&freeBlock, sizeof(char), 1, this->diskFile);
+					// Get double indirect block offset
+					int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
+					indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
+				}
+				// Get block from indirect block
+				blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
+			}
+			else{
+				blockAddress = inode->direct[iNodeBlockNum];
+			}
+			
+			int diskBlockNum = FREE_BLOCK_START + (blockAddress - startingByte)/this->blockSize;
+			// Go to Block Byte Address
+			if(fseek(this->diskFile, diskBlockNum, SEEK_SET) != 0){
+				perror("Read fseek error: ");
+				exit(EXIT_FAILURE);
+			}
+			
+			fwrite(&freeBlock, sizeof(char), 1, this->diskFile);
+			
+			
+			iNodeBlockNum++;
+			if (!indirect && iNodeBlockNum == 12) {
+				indirect = true;
+				iNodeBlockNum = 0;
+			}
+		}
+		if(indirect){ 
+			// Free last indirect block
+			int diskBlockNum = FREE_BLOCK_START + (indirectAddr - startingByte)/this->blockSize;
+			if(fseek(this->diskFile, diskBlockNum, SEEK_SET) != 0){
+				perror("Read fseek error: ");
+				exit(EXIT_FAILURE);
+			}
+			fwrite(&freeBlock, sizeof(char), 1, this->diskFile);
+		}
+		if (inode->indirect2x != -1) {
+			// Free double indirect block
+			int diskBlockNum = FREE_BLOCK_START + (inode->indirect2x - startingByte)/this->blockSize;
+			if(fseek(this->diskFile, diskBlockNum, SEEK_SET) != 0){
+				perror("Read fseek error: ");
+				exit(EXIT_FAILURE);
+			}
+			fwrite(&freeBlock, sizeof(char), 1, this->diskFile);
+		}
+		
+		// Free inode block
+		int diskBlockNum = FREE_BLOCK_START + (inodeWithAddress->address - startingByte)/this->blockSize;
+		if(fseek(this->diskFile, diskBlockNum, SEEK_SET) != 0){
+			perror("Read fseek error: ");
+			exit(EXIT_FAILURE);
+		}
+		fwrite(&freeBlock, sizeof(char), 1, this->diskFile);
+	}
 }
 
 void DiskController::read(int idx){
@@ -296,7 +376,7 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 	int blockAddress = -1;
 	int indirectAddr = inode->indirect;
 	int indirectSize = this->blockSize/sizeof(int);
-	bool indirect = false;
+	bool indirect = iNodeBlockNum >= 12;
 
 	// cout << "iNode size: " << inode->size << endl;
 	// cout << "iNode direct: [";
