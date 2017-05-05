@@ -53,15 +53,16 @@ class DiskController{
     public:
         DiskController(FILE *diskFile);
         void create(string fileName);
-	void list();
-        void read(int idx);
-	void cat(string fileName);
+		void list();
+		void cat(string fileName);
         iNodeWithAddress* fileNameToInode(string fileName);
         int getFirstFreeBlock();
 		void read(string fileName, int startByte, int numBytes);
         void write(string fileName, char letter, int startByte, int numBytes); 
         void import(string unixFileName);
 		int getBlockIndirect(int address, int blockOffset);
+		void deleteFile(string fileName);
+		void freeBlock(int blockNum);
 };
 
 DiskController::DiskController(FILE *diskFile){
@@ -154,34 +155,88 @@ void DiskController::create(string fileName){
     this->inodeIndexMap[fileName] = inodeIndex; //Add new file to map
 }
 
-void DiskController::read(int idx){
- 	int inodeAddress = INODE_START + idx * sizeof(int);
-
-    if(fseek(this->diskFile,inodeAddress,SEEK_SET) != 0){
-        perror("fseek failed: ");
-        exit(EXIT_FAILURE);
-    }
-    int blockAddress;
-	int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
-	if(result != 1){
-		perror("fread error: ");
+// Function freeBlock sets blockMap[blockNum] = -1
+void DiskController::freeBlock(int blockNum){
+	int freeBlock = -1;
+	if(fseek(this->diskFile, FREE_BLOCK_START + blockNum * sizeof(int8_t), SEEK_SET) != 0){
+		perror("FreeBlock fseek error: ");
 		exit(EXIT_FAILURE);
 	}
-
-	if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
-        perror("fseek failed: ");
-        exit(EXIT_FAILURE);
-    }
-
-	iNode *inode = new iNode();
-	result = fread(inode, sizeof(iNode), 1, this->diskFile);
-	if(result != 1){
-		perror("fread error: ");
+	if(fwrite(&freeBlock, sizeof(int8_t), 1, this->diskFile) != 1){
+		perror("FreeBlock fwrite error: ");
 		exit(EXIT_FAILURE);
 	}
+	// cout << "Freed Block " << blockNum << endl;
+}
 
-	cout << "FileName: " << inode->name << endl; 
-	cout << "FileSize: " << inode->size << endl; 
+// Works -- need to check double indirect
+void DiskController::deleteFile(string fileName){
+	cout << "\nIN DELETE" <<endl;
+	iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
+    if(inodeWithAddress != NULL) {
+		iNode *inode = inodeWithAddress->inode;
+		int totalBlocks = inode->size/this->blockSize;
+		int indirectSize = this->blockSize/sizeof(int);
+		int indirectAddr = inode->indirect;
+		bool indirect = false;
+		int iNodeBlockNum = 0;
+		// cout << "totalBlocks: " << totalBlocks << endl;
+		while(inode->size != 0 && totalBlocks >= 0) {
+			int blockAddress = -1;
+			if(indirect){
+				// If double indirect get next indirect block
+				if(iNodeBlockNum != 0 && iNodeBlockNum % indirectSize == 0){
+					// Free previous indirect block
+					// cout << "Indirect: ";
+					this->freeBlock((indirectAddr - startingByte)/this->blockSize);
+					// Get double indirect block offset
+					int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
+					indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
+				}
+				// Get block from indirect block
+				blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
+			}
+			else{
+				blockAddress = inode->direct[iNodeBlockNum];
+			}
+			
+			// Go to Block Byte Address
+			// cout << iNodeBlockNum << ": ";
+			this->freeBlock((blockAddress - startingByte)/this->blockSize);
+			
+			totalBlocks--;
+			iNodeBlockNum++;
+			if (!indirect && iNodeBlockNum == 12) {
+				indirect = true;
+				iNodeBlockNum = 0;
+			}
+		}
+		// Free last indirect block
+		if(indirect){
+			// cout << "Indirect: ";
+			this->freeBlock((indirectAddr - startingByte)/this->blockSize);
+		}
+		// Free double indirect block
+		if (inode->indirect2x != -1) {
+			// cout << "Double Indirect: ";
+			this->freeBlock((inode->indirect2x - startingByte)/this->blockSize);
+		}
+		// Free Block containing iNode
+		// cout << "iNode: ";
+		this->freeBlock((inodeWithAddress->address - startingByte)/this->blockSize);
+		// Free iNode
+		int freeBlock = -1;
+		if(fseek(this->diskFile, INODE_START + this->inodeIndexMap[fileName] * sizeof(int), SEEK_SET) != 0){
+			perror("FreeBlock fseek error: ");
+			exit(EXIT_FAILURE);
+		}
+		if(fwrite(&freeBlock, sizeof(int), 1, this->diskFile) != 1){
+			perror("FreeBlock fwrite error: ");
+			exit(EXIT_FAILURE);
+		}
+		// Remove inode from map
+		this->inodeIndexMap.erase(fileName);
+	}
 }
 
 void DiskController::list(){
@@ -311,8 +366,7 @@ int DiskController::getBlockIndirect(int address, int blockOffset){
 		perror("Read fseek error: ");
 		exit(EXIT_FAILURE);
 	}
-	int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
-	if(result != 1){
+	if(fread(&blockAddress, sizeof(int), 1, this->diskFile) != 1){
 		perror("Read fread error: ");
 		exit(EXIT_FAILURE);
 	}
@@ -321,133 +375,122 @@ int DiskController::getBlockIndirect(int address, int blockOffset){
 
 void DiskController::read(string fileName, int startByte, int numBytes){
 	cout << "\nIN READ" << endl;
-//	iNode *inode = this->fileNameToInode(fileName)->inode;
-
     //Should first check if inodeWithAddress is null before accessing inode attribute.
     //The function returns null if the name does not correspond to an existing inode
     iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
-    if(inodeWithAddress == NULL)
-        return;
-    iNode *inode = inodeWithAddress->inode;
-    
-    int endByte = startByte + numBytes;
-	if(endByte> inode->size){
-        fprintf(stderr, "Read Error: cannot access byte %d in a file of size %d\n", endByte, inode->size);
-		 exit(EXIT_FAILURE);
-    }
-
-
-    // ****Is this a better approach then giving an error if the last byte is too large?
-	// If last byte to be read is larger than the file size then read upto last file byte
-	int bytesLeft = endByte > inode->size? inode->size - startByte: numBytes;
-	int iNodeBlockNum = startByte/this->blockSize;
-	int blockByte = startByte%this->blockSize;
-	int blockAddress = -1;
-	int indirectAddr = inode->indirect;
-	int indirectSize = this->blockSize/sizeof(int);
-//    bool indirect = false;
-
-	bool indirect = iNodeBlockNum >= 12;
-
-    if(indirect){
-        iNodeBlockNum -= 12;
-    }
-/*
-	 cout << "iNode size: " << inode->size << endl;
-	 cout << "iNode direct: [";
-	 for(int i=0; i<12; i++) {
-	   if (i > 0) cout << ",";
-	   cout << inode->direct[i];
-	 }
-	 cout << "]" << endl;
-	 cout << "iNode indirect: " << inode->indirect << endl;;
-	 cout << "iNode block " << iNodeBlockNum << " at blockByte "<< blockByte << endl;
-*/
-	
-	// ***Read by block
-	while(bytesLeft > 0){
-		if(indirect){
-			// If double indirect get next indirect block
-			if(iNodeBlockNum != 0 && iNodeBlockNum % indirectSize == 0){
-				// Get double indirect block offset
-				int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
-				indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
+    if (inodeWithAddress != NULL) {
+		iNode *inode = inodeWithAddress->inode;
+		int endByte = startByte + numBytes;
+		// if(endByte> inode->size){
+			// fprintf(stderr, "Read Error: cannot access byte %d in a file of size %d\n", endByte, inode->size);
+			 // exit(EXIT_FAILURE);
+		// }
+		
+		// ****Is this a better approach then giving an error if the last byte is too large?
+		// If last byte to be read is larger than the file size then read upto last file byte
+		int bytesLeft = endByte > inode->size? inode->size - startByte: numBytes;
+		int iNodeBlockNum = startByte/this->blockSize;
+		int blockByte = startByte%this->blockSize;
+		int blockAddress = -1;
+		// Set up for indirect blocks (and double indirect)
+		int indirectAddr = inode->indirect;
+		int indirectSize = this->blockSize/sizeof(int);
+		bool indirect = iNodeBlockNum >= 12;
+		if(indirect) iNodeBlockNum -= 12;
+	/*
+		 cout << "iNode size: " << inode->size << endl;
+		 cout << "iNode direct: [";
+		 for(int i=0; i<12; i++) {
+		   if (i > 0) cout << ",";
+		   cout << inode->direct[i];
+		 }
+		 cout << "]" << endl;
+		 cout << "iNode indirect: " << inode->indirect << endl;
+		 cout << "iNode dIndirect: " << inode->indirect2x << endl;
+		 cout << "iNode block " << iNodeBlockNum << " at blockByte "<< blockByte << endl;
+	*/
+		
+		// ***Read by block
+		while(bytesLeft > 0){
+			if(indirect){
+				// If double indirect get next indirect block
+				if(iNodeBlockNum != 0 && iNodeBlockNum % indirectSize == 0){
+					// Get double indirect block offset
+					int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
+					indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
+				}
+				// Get block from indirect block
+				blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
 			}
-			// Get block from indirect block
-			blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
+			else{
+				blockAddress = inode->direct[iNodeBlockNum];
+			}
+			
+			// TODO remove
+			if (bytesLeft == numBytes) {
+				cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+			}
+			
+			// If stop reading in middle of block set numBytes to bytesLeft
+			int size = blockByte + bytesLeft < this->blockSize? bytesLeft:this->blockSize - blockByte;
+			char *str = (char *) calloc(size, sizeof(char));
+			
+			// Read Block
+			if(fseek(this->diskFile, blockAddress + blockByte, SEEK_SET) != 0){
+				perror("Read fseek error: ");
+				exit(EXIT_FAILURE);
+			}
+			int result = fread(str, sizeof(char), size, this->diskFile);
+			if(result != size){
+				perror("Read fread error: ");
+				exit(EXIT_FAILURE);
+			}
+			
+			// Output Block
+			cout << str;
+			
+			// Update 
+			free(str);
+			bytesLeft-=size;
+			iNodeBlockNum++;
+			blockByte = 0;
+			
+			// If direct and have read 12th direct block then switch to indirect
+			if (!indirect && iNodeBlockNum == 12) {
+				indirect = true;
+				iNodeBlockNum = 0;
+			}
+			
+	//		 cout <<endl; // TODO remove (new line every block)
 		}
-		else{
-			blockAddress = inode->direct[iNodeBlockNum];
-		}
 		
-		// TODO remove
-		if (bytesLeft == numBytes) {
-			cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
-		}
-		
-		// Go to Block Byte Address
-		if(fseek(this->diskFile, blockAddress + blockByte, SEEK_SET) != 0){
-			perror("Read fseek error: ");
-			exit(EXIT_FAILURE);
-		}
-		
-		// If stop reading in middle of block set numBytes to bytesLeft
-		int size = blockByte + bytesLeft < this->blockSize? bytesLeft:this->blockSize - blockByte;
-		
-		// Read Block
-		char *str = (char *) calloc(size, sizeof(char));
-		int result = fread(str, sizeof(char), size, this->diskFile);
-		//if(result != size){
-		//	perror("Read fread error: ");
-		//	exit(EXIT_FAILURE);
-		//}
-		// Output Block
-		cout << str;
-		
-		// Update 
-		free(str);
-		bytesLeft-=size;
-		iNodeBlockNum++;
-		blockByte = 0;
-		
-		// If direct and have read 12th direct block then switch to indirect
-		if (!indirect && iNodeBlockNum == 12) {
-			indirect = true;
-			iNodeBlockNum = 0;
-		}
-
- //       cout << "indirect " << indirect << ", " << iNodeBlockNum << endl;
-  //      cout << "bytes left " << bytesLeft << endl;
-		
-//		 cout <<endl; // TODO remove (new line every block)
-	}
-	
-	// ***Read by char
-	// if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
-		// perror("Read fseek error: ");
-		// exit(EXIT_FAILURE);
-	// }
-	// while(bytesLeft > 0) {
-		// char c;
-		// int result = fread(&c, sizeof(char), 1, this->diskFile);
-		// if(result != 1){
-			// perror("Read fread error: ");
+		// ***Read by char
+		// if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+			// perror("Read fseek error: ");
 			// exit(EXIT_FAILURE);
 		// }
-		// cout << c;
-		// blockByte++;
-		// bytesLeft--;
-		// if (blockByte == this->blockSize) {
-			// blockAddress = ++blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
-			// blockByte = 0;
-			// if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
-				// perror("fseek failed: ");
+		// while(bytesLeft > 0) {
+			// char c;
+			// int result = fread(&c, sizeof(char), 1, this->diskFile);
+			// if(result != 1){
+				// perror("Read fread error: ");
 				// exit(EXIT_FAILURE);
 			// }
+			// cout << c;
+			// blockByte++;
+			// bytesLeft--;
+			// if (blockByte == this->blockSize) {
+				// blockAddress = ++blockIdx > 12? -1: inode->direct[blockIdx];//TODO indirect and dIndirect blocks
+				// blockByte = 0;
+				// if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+					// perror("fseek failed: ");
+					// exit(EXIT_FAILURE);
+				// }
+			// }
 		// }
-	// }
-	
-	cout << endl;
+		
+		cout << endl;
+	}
 }
 
 //NOT FINISHED
@@ -702,7 +745,6 @@ int main(int argc, char** argv){
 
     diskController->create("test");
     diskController->create("Eric");
-	diskController->read(0);
     diskController->write("test", 'a', 0, 1546);
     diskController->write("test", 'b', 1546, 125);
     //diskController->write("test", 'b', 1536, 10);
@@ -713,6 +755,9 @@ int main(int argc, char** argv){
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
+	diskController -> list();
+	diskController->deleteFile("test");
+	diskController->deleteFile("Eric");
 	diskController -> list();
 	
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
