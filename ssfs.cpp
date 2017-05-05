@@ -59,7 +59,7 @@ class DiskController{
         int getFirstFreeBlock();
 		void read(string fileName, int startByte, int numBytes);
         void write(string fileName, char letter, int startByte, int numBytes); 
-        void import(string unixFileName);
+	void import(string ssfsFileName, string unixFileName);
 		int getBlockIndirect(int address, int blockOffset);
 		void deleteFile(string fileName);
 		void freeBlock(int blockNum);
@@ -707,16 +707,60 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
     fwrite(inode, sizeof(iNode), 1, this->diskFile);
 }
 
-void DiskController::import(string unixFileName){
-    if(this->inodeIndexMap.find(unixFileName) == this->inodeIndexMap.end()){//File does not exist already
+void DiskController::import(string ssfsFileName, string unixFileName){
+//	int index;
+    if(this->inodeIndexMap.find(ssfsFileName) == this->inodeIndexMap.end()){//File does not exist already
         cout << "File not found "<< endl;
+	this -> create(ssfsFileName);
+//	index = this->inodeIndexMap[ssfsFileName];
     }
     else{  //File already exists - overwrite 
-        int index = this->inodeIndexMap[unixFileName];
-        cout << "File exists and index is " << index << endl;
+  //      index = this->inodeIndexMap[ssfsFileName];
+  //      cout << "File exists and index is " << index << endl;
+	iNodeWithAddress *inodeWithAddress = this->fileNameToInode(ssfsFileName);
+	if(inodeWithAddress != NULL){
+		iNode *inode = inodeWithAddress->inode;
+		inode->size = 0;
+		if(fseek(this->diskFile, inodeWithAddress->address, SEEK_SET) != 0){
+			perror("fseek failed: ");
+			exit(EXIT_FAILURE);
+		}
+		fwrite(inode, sizeof(iNode), 1, this->diskFile);
+	}
     }
 
+	const char* ufn = unixFileName.c_str();
+	ifstream ifs(ufn);
+	char toWrite;
+	int startByte = 0;
+	if (ifs.is_open()){
+		while (ifs >> noskipws >> toWrite){
+			//ifs >> noskipws >> toWrite;
+//			if (toWrite == '\n')
+//				continue;
+			if(toWrite == '\n')
+				cout << "WRITING - NEWLINE" << endl;
+			else
+				cout << "WRITING - " << toWrite << endl;
+			write(ssfsFileName, toWrite, startByte, 1);
+			startByte++;
+		}
+	}
+	ifs.close();
+/*
+	int inodeAddress = this -> inodeIndexMap[ssfsFileName];
+	fseek(this->diskFile,inodeAddress,SEEK_SET);
+
+	iNode *inode = new iNode();
+	int result = fread(inode, sizeof(iNode), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+	inode -> size = startByte;
+*/
 }
+
 
 int DiskController::findStartingByte(){
     return FREE_BLOCK_START + this->numBlocks * sizeof(int8_t);
@@ -743,22 +787,39 @@ int main(int argc, char** argv){
 
     diskController = new DiskController(diskFile);
 
-    diskController->create("test");
-    diskController->create("Eric");
-    diskController->write("test", 'a', 0, 1546);
-    diskController->write("test", 'b', 1546, 125);
+  //  diskController->create("test");
+ //   diskController->create("Eric");
+ //   diskController->write("test", 'a', 0, 1546);
+ //   diskController->write("test", 'b', 1546, 125);
     //diskController->write("test", 'b', 1536, 10);
-    diskController->read("test", 1660, 11);
+ //   diskController->read("test", 1660, 11);
 //    diskController->write("test", 'b', 125,20);
 //    diskController->read("test", 120, 145);
 
 //    diskController->read(1);
 //    diskController->import("test");
 //    diskController->import("blah");
+
+	cout << endl;
 	diskController -> list();
-	diskController->deleteFile("test");
-	diskController->deleteFile("Eric");
+	cout << endl;
+//	diskController->deleteFile("test");
+//	diskController->deleteFile("Eric");
+	cout << endl;
 	diskController -> list();
+	cout << endl;
+//	diskController->import("unixTest", "unixFileTest.txt");
+	cout << endl;
+	diskController -> list();
+	cout << endl;
+//	diskController -> cat("unixTest");
+
+	cout << endl;
+    	diskController->create("test123");
+    	diskController->write("test123", 'a', 0, 50);	
+	diskController->import("test123", "unixFileTest.txt");
+	diskController->cat("test123");
+	
 	
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
 /*
