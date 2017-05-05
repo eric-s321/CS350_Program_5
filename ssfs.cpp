@@ -8,6 +8,8 @@
 #include <string>
 #include <fstream>
 #include <map>
+#include <sstream>
+#include <semaphore.h>
 #include <iostream>
 #include <queue>
 
@@ -39,7 +41,7 @@ struct iNodeWithAddress{
     iNode *inode;
     int address;
 };
-
+void* diskCont(void* arg);
 void* diskOp(void* commandFile);
 
 class DiskController{
@@ -508,96 +510,151 @@ int DiskController::findStartingByte(){
 
 DiskController *diskController;   //Making global so it can be accessed by all threads
 queue<struct command> waitingCommands;
-
+sem_t diskOpsCond;
+int numThreadsMade = 0;
+pthread_mutex_t queueLock = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char** argv){
-
 	if (argc > 6 || argc < 3){
 		fprintf(stderr, "usage: ssfs <disk file name> thread1ops.txt thread2ops.txt thread3ops.txt\n");
 		exit(EXIT_FAILURE);
 	}
     
     char *diskFileName = argv[1];
-
-    FILE *diskFile = fopen(diskFileName, "rb+"); 
-    if(diskFile == NULL){
-        perror("Error opening disk file: ");
-		exit(EXIT_FAILURE);
-    }
-
-    diskController = new DiskController(diskFile);
-
-    diskController->create("test");
-    diskController->create("Eric");
-	diskController->create("listTest");
-	//diskController->read(0);
-    diskController->write("test", 'a', 0, 5);
-    //diskController->read("test", 0, 128);
-    diskController->write("test", 'b', 5,3);
-	diskController -> cat("test");
-    //diskController->read("test", 120, 145);
-//    diskController->read(1);
-//    diskController->import("test");
-//    diskController->import("blah");
-	diskController -> list();
 	
 //Commented this out because it was getting stuck while parsing. Didn't change anything here
-/*
+
 	int i;
 	char *filename;
 	pthread_t threads[4];
+	pthread_t diskThread;
+	sem_init(&diskOpsCond, 1, 0);
 	for (i = 2; i < argc; i++){
+		cout << "making new thread" << endl;
+		numThreadsMade++;
 		filename = argv[i];
 		//send new thread to threadops
 		void* v = (void*)filename;
 		pthread_create(&threads[i-2],NULL,diskOp,v);
 	}
+	void *d = (void*)diskFileName;
+	pthread_create(&diskThread, NULL, diskCont,d);
+	//threads never finish diskOp while loop
 	for (int i = 0; i < argc-2; i++){
 		pthread_join(threads[i], NULL);
 	}
-*/
+	pthread_join(diskThread, NULL);
+}
+
+void* diskCont(void* arg){
+	char* diskFileName = (char*)arg;
+	FILE *diskFile = fopen(diskFileName, "rb+"); 
+	if(diskFile == NULL){
+	perror("Error opening disk file: ");
+		exit(EXIT_FAILURE);
+	}
+	diskController = new DiskController(diskFile);
+	
+	int semVal;
+	sem_getvalue(&diskOpsCond, &semVal);
+	while (true){
+		if (!waitingCommands.empty()){
+			struct command todo = waitingCommands.front();
+			if (todo.commandName.compare("CAT") == 0){
+				diskController -> cat(todo.fileName);
+			} else if (todo.commandName.compare("CREATE") == 0){
+				diskController -> create(todo.fileName);
+			} else if (todo.commandName.compare("IMPORT") == 0){
+				//diskController -> import(todo.fileName, todo.unixFileName);
+ 			} else if (todo.commandName.compare("DELETE") == 0){
+				//diskController -> delete(todo.fileName);
+			} else if (todo.commandName.compare("WRITE") == 0){
+				diskController -> write(todo.fileName, todo.charParameter, todo.startByte, todo.numBytes);
+			} else if (todo.commandName.compare("READ") == 0){
+				diskController -> read(todo.fileName, todo.startByte, todo.numBytes);
+			} else if (todo.commandName.compare("LIST") == 0){
+				diskController -> list();
+			} else if (todo.commandName.compare("SHUTDOWN") == 0){
+				//diskController -> shutdown();
+			} 
+			pthread_mutex_lock(&queueLock);
+			waitingCommands.pop();
+			pthread_mutex_unlock(&queueLock);
+		}
+		sem_getvalue(&diskOpsCond, &semVal);
+		//cout << semVal << endl;
+		if (semVal == numThreadsMade && waitingCommands.empty()){
+			break;
+		}
+	}
+	
+	return NULL;
 }
 
 void* diskOp(void* commandFileName){
 	char* cstring = (char*)commandFileName;
-	printf("%s\n", cstring);
 	ifstream commandFile(cstring);
 	string commandString;
+	cout << "new thread" << endl;
+	//this is infinite loop right now
 	while (!commandFile.eof()){
 		struct command c;
-		commandFile >> c.commandName;
-		//prevents reading last line twice
+		string commandLine;
+		getline(commandFile, commandLine);
+		stringstream commandStringStream;
+		commandStringStream.str(commandLine);
+		//if statement prevents reading last line twice
 		if (!commandFile.eof()){
+			commandStringStream >> c.commandName;
 			if (c.commandName.compare("CAT") == 0){
-				commandFile >> c.fileName;
+				commandStringStream >> c.fileName;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("CREATE") == 0){
-				commandFile >> c.fileName;
+				commandStringStream >> c.fileName;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("IMPORT") == 0){
-				commandFile >> c.fileName;
-				commandFile >> c.unixFileName;
+				commandStringStream >> c.fileName;
+				commandStringStream >> c.unixFileName;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
  			} else if (c.commandName.compare("DELETE") == 0){
-				commandFile >> c.fileName;
+				commandStringStream >> c.fileName;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("WRITE") == 0){
-				commandFile >> c.fileName;
-				commandFile >> c.charParameter;
-				commandFile >> c.startByte;
-				commandFile >> c.numBytes;
+				commandStringStream >> c.fileName;
+				commandStringStream >> c.charParameter;
+				commandStringStream >> c.startByte;
+				commandStringStream >> c.numBytes;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("READ") == 0){
-				commandFile >> c.fileName;
-				commandFile >> c.startByte;
-				commandFile >> c.numBytes;
+				commandStringStream >> c.fileName;
+				commandStringStream >> c.startByte;
+				commandStringStream >> c.numBytes;
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("LIST") == 0){
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("SHUTDOWN") == 0){
+				pthread_mutex_lock(&queueLock);
 				waitingCommands.push(c);
+				pthread_mutex_unlock(&queueLock);
 			} 
 		}
 	}	
+	//WHAT IF A THREAD POSTS AND WAITS BEFORE ANOTHER THREAD POSTS FIRST, THEN DISKCONTROLLER WILL EXIT LOOP????
+	sem_post(&diskOpsCond);
+	cout << "thread finished" << endl;
 	return NULL;
 }
