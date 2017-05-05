@@ -62,7 +62,7 @@ class DiskController{
         int getFirstFreeBlock();
 		void read(string fileName, int startByte, int numBytes);
         void write(string fileName, char letter, int startByte, int numBytes); 
-        void import(string unixFileName);
+        void import(string ssfsFileName, string unixFileName);
 		int getBlockIndirect(int address, int blockOffset);
 };
 
@@ -493,15 +493,40 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
     fwrite(inode, sizeof(iNode), 1, this->diskFile);
 }
 
-void DiskController::import(string unixFileName){
-    if(this->inodeIndexMap.find(unixFileName) == this->inodeIndexMap.end()){//File does not exist already
+void DiskController::import(string ssfsFileName, string unixFileName){
+	int index;
+    if(this->inodeIndexMap.find(ssfsFileName) == this->inodeIndexMap.end()){//File does not exist already
         cout << "File not found "<< endl;
+	this -> create(ssfsFileName);
+	index = this->inodeIndexMap[ssfsFileName];
     }
     else{  //File already exists - overwrite 
-        int index = this->inodeIndexMap[unixFileName];
+        index = this->inodeIndexMap[ssfsFileName];
         cout << "File exists and index is " << index << endl;
     }
 
+	const char* ufn = unixFileName.c_str();
+	ifstream ifs(ufn);
+	char toWrite;
+	int startByte = 0;
+	if (ifs.is_open()){
+		while (!ifs.eof()){
+			ifs >> noskipws >> toWrite;
+			if (toWrite != '\n')
+				write(ssfsFileName, toWrite, startByte, 1);
+			startByte++;
+		}
+	}
+	ifs.close();
+	int inodeAddress = this -> inodeIndexMap[ssfsFileName];
+	fseek(this->diskFile,inodeAddress,SEEK_SET);
+	iNode *inode = new iNode();
+	int result = fread(inode, sizeof(iNode), 1, this->diskFile);
+	if(result != 1){
+		perror("fread error: ");
+		exit(EXIT_FAILURE);
+	}
+	inode -> size = startByte;
 }
 
 int DiskController::findStartingByte(){
@@ -530,7 +555,6 @@ int main(int argc, char** argv){
 	pthread_t diskThread;
 	sem_init(&diskOpsCond, 1, 0);
 	for (i = 2; i < argc; i++){
-		cout << "making new thread" << endl;
 		numThreadsMade++;
 		filename = argv[i];
 		//send new thread to threadops
@@ -557,6 +581,7 @@ void* diskCont(void* arg){
 	
 	int semVal;
 	sem_getvalue(&diskOpsCond, &semVal);
+	bool shutdownWhenQueueEmpty = false;
 	while (true){
 		if (!waitingCommands.empty()){
 			struct command todo = waitingCommands.front();
@@ -565,7 +590,7 @@ void* diskCont(void* arg){
 			} else if (todo.commandName.compare("CREATE") == 0){
 				diskController -> create(todo.fileName);
 			} else if (todo.commandName.compare("IMPORT") == 0){
-				//diskController -> import(todo.fileName, todo.unixFileName);
+				diskController -> import(todo.fileName, todo.unixFileName);
  			} else if (todo.commandName.compare("DELETE") == 0){
 				//diskController -> delete(todo.fileName);
 			} else if (todo.commandName.compare("WRITE") == 0){
@@ -575,7 +600,7 @@ void* diskCont(void* arg){
 			} else if (todo.commandName.compare("LIST") == 0){
 				diskController -> list();
 			} else if (todo.commandName.compare("SHUTDOWN") == 0){
-				//diskController -> shutdown();
+				shutdownWhenQueueEmpty = true;
 			} 
 			pthread_mutex_lock(&queueLock);
 			waitingCommands.pop();
@@ -584,6 +609,13 @@ void* diskCont(void* arg){
 		sem_getvalue(&diskOpsCond, &semVal);
 		//cout << semVal << endl;
 		if (semVal == numThreadsMade && waitingCommands.empty()){
+			if (shutdownWhenQueueEmpty){
+				cout << "file closed" << endl;
+				if (fclose(diskFile) != 0){
+					perror("Error closing disk file: ");
+					exit(EXIT_FAILURE);
+				}
+			}	
 			break;
 		}
 	}
@@ -595,7 +627,6 @@ void* diskOp(void* commandFileName){
 	char* cstring = (char*)commandFileName;
 	ifstream commandFile(cstring);
 	string commandString;
-	cout << "new thread" << endl;
 	//this is infinite loop right now
 	while (!commandFile.eof()){
 		struct command c;
@@ -655,6 +686,5 @@ void* diskOp(void* commandFileName){
 	}	
 	//WHAT IF A THREAD POSTS AND WAITS BEFORE ANOTHER THREAD POSTS FIRST, THEN DISKCONTROLLER WILL EXIT LOOP????
 	sem_post(&diskOpsCond);
-	cout << "thread finished" << endl;
 	return NULL;
 }
