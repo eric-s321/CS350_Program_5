@@ -678,14 +678,14 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                    // If double indirect update double indirect block
                    //if(blockNumber != 12 && (blockNumber-12) % indirectSize == 0) {
                    if(blockNumber != 12 && (blockNumber-12) >= indirectSize) {
-				cout << "Block number is " << blockNumber << endl;
-				int offset = ((blockNumber-12)/indirectSize) - 1; // subtract 1 for single indirect
-				cout << "Offset is " << offset << endl;
+                        cout << "Block number is " << blockNumber << endl;
+                        int offset = ((blockNumber-12)/indirectSize) - 1; // subtract 1 for single indirect
+                        cout << "Offset is " << offset << endl;
                    		if(fseek(this->diskFile, inode->indirect2x + offset, SEEK_SET) != 0){
 		                   perror("fseek failed: ");
 		                   exit(EXIT_FAILURE);
 		               }
-				cout << "Indirect address is " << indirectAddr << endl;
+  				   cout << "Indirect address is " << indirectAddr << endl;
 		               fwrite(&indirectAddr, sizeof(int), 1, this->diskFile);
                    }
                    freeBlockAddress = this->getFirstFreeBlock();
