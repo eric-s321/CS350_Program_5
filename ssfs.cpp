@@ -1020,7 +1020,7 @@ void* diskCont(void* arg){
 			} else if (todo.commandName.compare("IMPORT") == 0){
 				diskController -> import(todo.fileName, todo.unixFileName);
  			} else if (todo.commandName.compare("DELETE") == 0){
-				//diskController -> delete(todo.fileName);
+				diskController -> deleteFile(todo.fileName);
 			} else if (todo.commandName.compare("WRITE") == 0){
 				diskController -> write(todo.fileName, todo.charParameter, todo.startByte, todo.numBytes);
 			} else if (todo.commandName.compare("READ") == 0){
