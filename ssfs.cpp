@@ -341,7 +341,7 @@ iNodeWithAddress* DiskController::fileNameToInode(string fileName){
     iNodeWithAddress *inodeWithAddress = new iNodeWithAddress();
     inodeWithAddress->inode = inode;
     inodeWithAddress->address = blockAddress;
-	cout << "File \"" << fileName << "\" inode at block address: " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+	//cout << "File \"" << fileName << "\" inode at block address: " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 
     return inodeWithAddress;
 }
@@ -484,17 +484,17 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 		
 		// ***Read by char
 		if(indirect){
-			cout << "iNodeBlockNum: " << iNodeBlockNum << ", "<< iNodeBlockNum % indirectSize <<endl;
+			//cout << "iNodeBlockNum: " << iNodeBlockNum << ", "<< iNodeBlockNum % indirectSize <<endl;
 			// If double indirect get next indirect block
 			if(iNodeBlockNum != 0 && iNodeBlockNum >= indirectSize){
 				// Get double indirect block offset
 				int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
 				indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
-				cout << "Starting indirect block at address " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
+				//cout << "Starting indirect block at address " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
 			}
 			// Get block from indirect block
 			blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
-			cout << "Starting block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+			//cout << "Starting block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 		}
 		else{
 			blockAddress = inode->direct[iNodeBlockNum];
@@ -505,7 +505,7 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 		}
 		while(bytesLeft > 0) {
 			if (bytesLeft == numBytes) {
-				cout << "\niNodeBlockNum:" << iNodeBlockNum << endl;
+				//cout << "\niNodeBlockNum:" << iNodeBlockNum << endl;
 				cout << "Reading first block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 			}
 			char c;
@@ -525,24 +525,27 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 					indirect = true;
 					iNodeBlockNum = 0;
 				}
-				cout << "\niNodeBlockNum:" << iNodeBlockNum << endl;
+				//cout << "\niNodeBlockNum:" << iNodeBlockNum << endl;
 				if(indirect){
 					// If double indirect get next indirect block
 					if(iNodeBlockNum != 0 && iNodeBlockNum % indirectSize == 0){
 						//cout << "double: " << inode->indirect2x << endl;
 						// Get double indirect block offset
 						int offset = (iNodeBlockNum/indirectSize) - 1; // subtract 1 for single indirect
+						//cout << endl << "double indirect: " << offset << " (block " << iNodeBlockNum << ")" << endl;
+						//cout << inode->indirect2x << endl;
 						indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
 					}
 					// Get block from indirect block
 					//cout << "indirect: " << indirectAddr << endl;
+					//cout << endl << "indirect: " << (iNodeBlockNum % indirectSize) << " (block " << iNodeBlockNum << ")" << endl;
 					blockAddress = this->getBlockIndirect(indirectAddr, iNodeBlockNum % indirectSize);
 					//cout << "indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
 				}
 				else{
 					blockAddress = inode->direct[iNodeBlockNum];
 				}
-				cout << "Reading block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+				//cout << "Reading block at address " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
 				if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
 					perror("fseek failed: ");
 					exit(EXIT_FAILURE);
@@ -557,7 +560,7 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 
 //NOT FINISHED
 void DiskController::write(string fileName, char letter, int startByte, int numBytes){
-	cout << "\nIN WRITE" << endl;
+	//cout << "\nIN WRITE" << endl;
     iNodeWithAddress *inodeWithAddress = this->fileNameToInode(fileName);
     if(inodeWithAddress == NULL)
         return;
@@ -581,8 +584,8 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
     //If there is not enough space in the file get more space
     while(bytesToWrite > 0){
-        cout << "bytes to write " << bytesToWrite << endl;
-        cout << "Writing to block " << blockNumber << " at byte " << byteNumber << endl;
+        //cout << "bytes to write " << bytesToWrite << endl;
+        //cout << "Writing to block " << blockNumber << " at byte " << byteNumber << endl;
 
         //Check if the next place to write is already allocated
         int blockAddress;
@@ -591,7 +594,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
             blockAddress = inode->direct[blockNumber];
         }
         //indirect
-        else if(blockNumber >= 12 && blockNumber < this->blockSize / (int)sizeof(int) + 12){
+        else if(blockNumber >= 12 && blockNumber < indirectSize + 12){
   //          cout << "IN ELSE IF " << endl;
             if(inode->indirect != -1){
  //              cout << "IN IF " << endl;
@@ -599,21 +602,26 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
             }
             else
                 blockAddress = -1;
-           	cout << "Indirect: " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+           	//cout << "Indirect: " << blockAddress << " (block " << (blockAddress - this->startingByte)/ this->blockSize << ")" << endl;
         		
         }
         //double indirect
         else{
-        
-        	cout << "Double indirect: " << inode->indirect2x << " (block " << (inode->indirect2x - this->startingByte)/ this->blockSize << ")" << endl;
+        	//if (blockNumber < 50) cout << blockNumber <<endl;
+        	//cout << "Double indirect: " << inode->indirect2x << " (block " << (inode->indirect2x - this->startingByte)/ this->blockSize << ")" << endl;
         	if(inode->indirect2x != -1) {
-        	int offset = ((blockNumber - 12) / indirectSize) - 1;
+        		//cout << "blockNumber: " << blockNumber << endl;
+        		int offset = ((blockNumber - 12) / indirectSize) - 1;
                 blockAddress = this->getBlockIndirect(inode->indirect2x, offset);
+                //cout << "blockAddress: " << blockAddress << endl;
                 if (blockAddress != -1) {
                 	blockAddress = this->getBlockIndirect(blockAddress, (blockNumber - 12) % 
                        (this->blockSize / (int)sizeof(int)));
                 }
             }
+            else
+            	blockAddress = -1;
+            //cout << "Double Indirect" << inode->indirect2x <<endl;
         }
 
         int writeSize = this->blockSize - byteNumber;
@@ -623,7 +631,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
         //This block is already allocated - write to it
         if(blockAddress != -1){
-            cout << "Already Allocated seeking to " << blockAddress + byteNumber << endl;
+            //cout << "Already Allocated seeking to " << blockAddress + byteNumber << endl;
             if(fseek(this->diskFile, blockAddress + byteNumber, SEEK_SET) != 0){
                 perror("fseek failed: ");
                 exit(EXIT_FAILURE);
@@ -643,7 +651,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
                     //Write to free block
                     
-           			 cout << "Seeking direct " << freeBlockAddress  << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+           			 //cout << "Seeking direct " << freeBlockAddress  << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                     if(fseek(this->diskFile, freeBlockAddress, SEEK_SET) != 0){
                         perror("fseek failed: ");
                         exit(EXIT_FAILURE);
@@ -656,11 +664,12 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
            if(indirect){
                //cout << "IN INDIRECT ALLOCATING" << endl;
 			//	if(blockNumber != 12 && (blockNumber-12) % indirectSize == 0){
+				//cout << blockNumber << endl;
                 if(blockNumber != 12 && (blockNumber-12) >= indirectSize) {
 					if (inode->indirect2x == -1) {
 						inode->indirect2x = freeBlockAddress;
 						
-        				cout << "Double indirect allocate: " << inode->indirect2x << " (block " << (inode->indirect2x - this->startingByte)/ this->blockSize << ")" << endl;
+        				//cout << "Double indirect allocate: " << inode->indirect2x << " (block " << (inode->indirect2x - this->startingByte)/ this->blockSize << ")" << endl;
 						if(fseek(this->diskFile, inode->indirect2x, SEEK_SET) != 0){
 		                   perror("fseek failed: ");
 		                   exit(EXIT_FAILURE);
@@ -677,10 +686,9 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 					indirectAddr = this->getBlockIndirect(inode->indirect2x, offset);
 				}
 				
-               //cout << "indirectAddr: " << indirectAddr << endl;
+               //if (blockNumber > 40) cout << "indirectAddr: " << indirectAddr << endl;
                if(indirectAddr == -1){// indirect block does not already exist
                    indirectAddr = freeBlockAddress;
-                   
                    if(blockNumber == INDIRECT_BLOCK_NUM) {
                    		inode->indirect = indirectAddr;
                    }
@@ -698,21 +706,21 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                    // If double indirect update double indirect block
                    //if(blockNumber != 12 && (blockNumber-12) % indirectSize == 0) {
                    if(blockNumber != 12 && (blockNumber-12) >= indirectSize) {
-                        cout << "Block number is " << blockNumber << endl;
+                        //cout << "Block number is " << blockNumber << endl;
                         int offset = ((blockNumber-12)/indirectSize) - 1; // subtract 1 for single indirect
-                        cout << "Offset is " << offset << endl;
-                   		if(fseek(this->diskFile, inode->indirect2x + offset, SEEK_SET) != 0){
+                        //cout << "Offset is " << offset << endl;
+                   		if(fseek(this->diskFile, inode->indirect2x + offset*sizeof(int), SEEK_SET) != 0){
 		                   perror("fseek failed: ");
 		                   exit(EXIT_FAILURE);
 		               }
-  				   cout << "Indirect address is " << indirectAddr << endl;
+  				   //cout << "Indirect address is " << indirectAddr << endl;
 		               fwrite(&indirectAddr, sizeof(int), 1, this->diskFile);
                    }
                    freeBlockAddress = this->getFirstFreeBlock();
-                   cout << "indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
+                   //cout << "indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
                }
                
-				cout << "Writing block at address " << freeBlockAddress << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+				//cout << "Writing block at address " << freeBlockAddress << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                
                int directBlockAddress = freeBlockAddress;
                
@@ -723,7 +731,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 			    cout << "Reading DIRECT first block at address " << directBlockAddress << " (block " << (directBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                 */
                //Go to indirect block
-               cout << "Seeking indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
+               //cout << "Seeking indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
                if(fseek(this->diskFile, indirectAddr, SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
@@ -738,7 +746,8 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                }while(dataUsed != -1);
                
              //  cout << "here" <<endl;
-             	cout << "Seeking indirectBlockAddr+offset: " << (indirectAddr+count*sizeof(int)) << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
+             	//if (blockNumber > 40) cout << "Seeking indirectBlockAddr+offset: " << (indirectAddr+count*sizeof(int)) << " (block " << ((indirectAddr+count*sizeof(int)) - this->startingByte)/ this->blockSize << ")" << endl;
+             	//if (blockNumber > 40) cout << "Seeking indirectBlockAddr+offset: " << (indirectAddr+(count+1)*sizeof(int)) << " (block " << ((indirectAddr+(count+1)*sizeof(int)) - this->startingByte)/ this->blockSize << ")" << endl;
 			   if(fseek(this->diskFile, indirectAddr+count*sizeof(int), SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
@@ -750,7 +759,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                //bytesToWrite -= writeSize;
                
                //Go to datablock to write to 
-               cout << "Seeking directBlockAddress: " << directBlockAddress << " (block " << (directBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
+               //cout << "Seeking directBlockAddress: " << directBlockAddress << " (block " << (directBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                if(fseek(this->diskFile, directBlockAddress, SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
@@ -799,7 +808,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 
 
         byteNumber = 0;
-        cout << endl;
+        //cout << endl;
     }
     
 /*
@@ -859,10 +868,10 @@ void DiskController::import(string ssfsFileName, string unixFileName){
 			//ifs >> noskipws >> toWrite;
 //			if (toWrite == '\n')
 //				continue;
-			if(toWrite == '\n')
-				cout << "WRITING - NEWLINE" << endl;
-			else
-				cout << "WRITING - " << toWrite << endl;
+			//if(toWrite == '\n')
+			//	cout << "WRITING - NEWLINE" << endl;
+			//else
+				//cout << "WRITING - " << toWrite << endl;
 			write(ssfsFileName, toWrite, startByte, 1);
 			startByte++;
 		}
@@ -962,11 +971,11 @@ int main(int argc, char** argv){
 
     //diskController->create("test");
 //    diskController->create("Eric");
-   //diskController->write("test", 'a', 0, 9760);
+   //diskController->write("test", 'a', 0, 9720);
     //diskController->write("test", 'b', 0, 1540);
     //diskController->write("test", 'a', 1535, 10);
     //diskController->read("test", 5630, 5);
-    //diskController->read("test", 9750, 10);
+    //diskController->read("test", 9700, 10);
     //diskController->read("test", 0, 1540);
     //diskController->read("test", 1530, 20);
     //diskController->read("test", 1000, 1512);

@@ -1,0 +1,5 @@
+IMPORT test XXLFile.txt
+CAT test
+LIST
+DELETE test
+LIST
