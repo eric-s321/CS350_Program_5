@@ -1,0 +1,3 @@
+IMPORT test XLFile.txt
+CAT test
+LIST

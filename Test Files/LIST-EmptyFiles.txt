@@ -1,0 +1,4 @@
+CREATE empty1
+CREATE empty2
+CREATE empty3
+LIST

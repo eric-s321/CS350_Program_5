@@ -1,0 +1,4 @@
+LIST
+CAT file1
+CAT file2
+CAT file3

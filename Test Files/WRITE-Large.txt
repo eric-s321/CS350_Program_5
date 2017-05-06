@@ -1,0 +1,5 @@
+CREATE writeTo
+WRITE writeTo a 0 256
+WRITE writeTo b 10 150
+READ writeTo 5 165
+WRITE writeTo a 256 10

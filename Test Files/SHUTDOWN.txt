@@ -1,0 +1,7 @@
+CREATE file1
+WRITE file1 a 0 10
+CREATE file2
+WRITE file2 b 0 10
+CREATE file3
+WRITE file3 c 0 10
+SHUTDOWN

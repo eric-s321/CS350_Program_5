@@ -1,0 +1,4 @@
+CREATE toRead
+WRITE toRead c 0 5
+WRITE toRead d 5 40
+READ toRead 5 38

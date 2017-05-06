@@ -1,0 +1,3 @@
+IMPORT test mediumFile.txt
+CAT test
+LIST
