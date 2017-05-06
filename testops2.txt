@@ -1,3 +1,4 @@
-CREATE Eric
-WRITE Eric a 0 5
-CAT Eric
+CREATE test1
+WRITE
+CAT
+SHUTDOWN

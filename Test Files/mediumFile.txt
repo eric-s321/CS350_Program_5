@@ -1,0 +1,2 @@
+Two keys are considered equivalent if the container's comparison object returns false reflexively (i.e., no matter the order in which the elements are passed as arguments). Another member function, map::count, can be used to just check whether a particular key exists. Member types iterator and const_iterator are bidirectional iterator types pointing to elements (of type value_type).
+Notice that value_type in map containers is an alias of pair

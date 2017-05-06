@@ -1,0 +1,3 @@
+CREATE test1
+WRITE test1 a 0 10
+CAT test1

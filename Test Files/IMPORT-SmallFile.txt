@@ -1,0 +1,3 @@
+IMPORT test smallFile.txt
+CAT test
+LIST

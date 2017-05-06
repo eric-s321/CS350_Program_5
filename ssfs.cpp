@@ -55,6 +55,7 @@ class DiskController{
     public:
         DiskController(FILE *diskFile);
         void create(string fileName);
+	void updateINodeMap();
 	void list();
         void read(int idx);
 	void cat(string fileName);
@@ -99,6 +100,10 @@ void DiskController::cat(string fileName){
 }
 
 void DiskController::create(string fileName){
+	if(this->inodeIndexMap.find(fileName) != this->inodeIndexMap.end()){//File name exists
+        	cout << "File name exists "<< endl;
+		return;
+  	}
     if(fseek(this->diskFile,FREE_BLOCK_START,SEEK_SET) != 0){
         perror("fseek failed: ");
         exit(EXIT_FAILURE);
@@ -112,7 +117,12 @@ void DiskController::create(string fileName){
             exit(EXIT_FAILURE);
         }
         blockIndex++;
-    }while(block != -1);
+    }while(block != -1 && blockIndex < this -> numBlocks);
+
+	if (blockIndex == this -> numBlocks){
+		cout << "Maximum number of blocks"<< endl;
+		return;
+	}
 
     int blockAddress = FREE_BLOCK_START + blockIndex * sizeof(int8_t); 
     fseek(this->diskFile,blockAddress,SEEK_SET);
@@ -129,7 +139,12 @@ void DiskController::create(string fileName){
             exit(EXIT_FAILURE);
         }
         inodeIndex++;
-    }while(inodeBlock != -1);
+    }while(inodeBlock != -1 && inodeIndex < 256);
+
+	if (inodeIndex == 256){
+		cout << "Maximum number of files"<< endl;
+		return;
+	}
 
     int inodeAddress = INODE_START + inodeIndex * sizeof(int); 
     int freeBlockAddress = this->startingByte + blockIndex * this->blockSize;
@@ -216,8 +231,8 @@ void DiskController::list(){
 				exit(EXIT_FAILURE);
 			}
 			char n[32];
-			for (int i = 0; i < 32; i++){
-				n[i] = inode -> name[i];
+			for (int j = 0; j < 32; j++){
+				n[j] = inode -> name[j];
 			}
 			cout << n << endl;
 		}
@@ -533,11 +548,57 @@ int DiskController::findStartingByte(){
     return FREE_BLOCK_START + this->numBlocks * sizeof(int8_t);
 }
 
+void DiskController::updateINodeMap(){
+	int inodeAddress = INODE_START;
+
+	for (int i = 0; i < 256; i++){
+		if (fseek(this-> diskFile, inodeAddress, SEEK_SET) != 0){
+			perror("fseek failed: ");
+        		exit(EXIT_FAILURE);
+		}
+		int blockAddress;
+		//read the inode address
+		int result = fread(&blockAddress, sizeof(int), 1, this->diskFile);
+		if(result != 1){
+			perror("fread error: ");
+			exit(EXIT_FAILURE);
+		}
+		//if inode exists
+		if (blockAddress != -1){
+			//seek to inode
+			if(fseek(this->diskFile,blockAddress,SEEK_SET) != 0){
+       				perror("fseek failed: ");
+        			exit(EXIT_FAILURE);
+    			}
+			//read in inode
+			iNode *inode = new iNode();
+			result = fread(inode, sizeof(iNode), 1, this->diskFile);
+			if(result != 1){
+				perror("fread error: ");
+				exit(EXIT_FAILURE);
+			}
+			
+			char n[32];
+			int nameSize = 0;
+			for (int j = 0; j < 32; j++){
+				if (inode -> name[j] != '\0'){
+					nameSize++;
+				}
+				n[j] = inode -> name[j];
+			}
+			string name(n, nameSize);
+			inodeIndexMap[name] = i;
+		}
+		inodeAddress += sizeof(int);
+	}	
+}
+
 DiskController *diskController;   //Making global so it can be accessed by all threads
 queue<struct command> waitingCommands;
 sem_t diskOpsCond;
 int numThreadsMade = 0;
 pthread_mutex_t queueLock = PTHREAD_MUTEX_INITIALIZER;
+bool shutdown = false;
 
 int main(int argc, char** argv){
 	if (argc > 6 || argc < 3){
@@ -578,10 +639,9 @@ void* diskCont(void* arg){
 		exit(EXIT_FAILURE);
 	}
 	diskController = new DiskController(diskFile);
-	
+	diskController -> updateINodeMap();
 	int semVal;
 	sem_getvalue(&diskOpsCond, &semVal);
-	bool shutdownWhenQueueEmpty = false;
 	while (true){
 		if (!waitingCommands.empty()){
 			struct command todo = waitingCommands.front();
@@ -599,17 +659,15 @@ void* diskCont(void* arg){
 				diskController -> read(todo.fileName, todo.startByte, todo.numBytes);
 			} else if (todo.commandName.compare("LIST") == 0){
 				diskController -> list();
-			} else if (todo.commandName.compare("SHUTDOWN") == 0){
-				shutdownWhenQueueEmpty = true;
 			} 
 			pthread_mutex_lock(&queueLock);
 			waitingCommands.pop();
 			pthread_mutex_unlock(&queueLock);
 		}
 		sem_getvalue(&diskOpsCond, &semVal);
-		//cout << semVal << endl;
+		
 		if (semVal == numThreadsMade && waitingCommands.empty()){
-			if (shutdownWhenQueueEmpty){
+			if (shutdown){
 				cout << "file closed" << endl;
 				if (fclose(diskFile) != 0){
 					perror("Error closing disk file: ");
@@ -628,7 +686,7 @@ void* diskOp(void* commandFileName){
 	ifstream commandFile(cstring);
 	string commandString;
 	//this is infinite loop right now
-	while (!commandFile.eof()){
+	while (!commandFile.eof() && !shutdown){
 		struct command c;
 		string commandLine;
 		getline(commandFile, commandLine);
@@ -678,13 +736,11 @@ void* diskOp(void* commandFileName){
 				waitingCommands.push(c);
 				pthread_mutex_unlock(&queueLock);
 			} else if (c.commandName.compare("SHUTDOWN") == 0){
-				pthread_mutex_lock(&queueLock);
-				waitingCommands.push(c);
-				pthread_mutex_unlock(&queueLock);
+				shutdown = true;
 			} 
 		}
 	}	
-	//WHAT IF A THREAD POSTS AND WAITS BEFORE ANOTHER THREAD POSTS FIRST, THEN DISKCONTROLLER WILL EXIT LOOP????
+	
 	sem_post(&diskOpsCond);
 	return NULL;
 }

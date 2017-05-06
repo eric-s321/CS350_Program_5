@@ -1,1 +1,2 @@
 CREATE test2
+LIST

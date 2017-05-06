@@ -1,3 +1,1 @@
-CREATE lala
-WRITE lala b 0 5
-CAT lala
+CREATE test3
