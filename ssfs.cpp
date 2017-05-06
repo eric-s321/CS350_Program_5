@@ -499,7 +499,7 @@ void DiskController::read(string fileName, int startByte, int numBytes){
 		else{
 			blockAddress = inode->direct[iNodeBlockNum];
 		}
-		if(fseek(this->diskFile, blockAddress, SEEK_SET) != 0){
+		if(fseek(this->diskFile, blockAddress + blockByte, SEEK_SET) != 0){
 			perror("Read fseek error: ");
 			 exit(EXIT_FAILURE);
 		}
@@ -960,17 +960,18 @@ int main(int argc, char** argv){
 
     diskController = new DiskController(diskFile);
 
-//    diskController->create("test");
+    //diskController->create("test");
 //    diskController->create("Eric");
-//    diskController->write("test", 'a', 0, 9760);
-    //diskController->write("test", 'b', 1546, 125);
-    //diskController->write("test", 'b', 1536, 10);
+   //diskController->write("test", 'a', 0, 9760);
+    //diskController->write("test", 'b', 0, 1540);
+    //diskController->write("test", 'a', 1535, 10);
     //diskController->read("test", 5630, 5);
- //   diskController->read("test", 9750, 10);
-    //diskController->read("test", 512, 1512);
+    //diskController->read("test", 9750, 10);
+    //diskController->read("test", 0, 1540);
+    //diskController->read("test", 1530, 20);
     //diskController->read("test", 1000, 1512);
 //    diskController->write("test", 'b', 125,20);
-//    diskController->read("test", 120, 145);
+   // diskController->read("test", 0, 20);
 
 //    diskController->read(1);
 //    diskController->import("test");
