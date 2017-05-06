@@ -1,0 +1,3 @@
+CREATE toRead
+WRITE toRead d 0 200
+READ toRead 5 150

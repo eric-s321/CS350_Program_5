@@ -1,3 +1,6 @@
 this is the test unix file
+<<<<<<< HEAD
 
 line
+=======
+>>>>>>> origin/diskQueue
