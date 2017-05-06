@@ -624,6 +624,8 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                     indirect = false;
 
                     //Write to free block
+                    
+           			 cout << "Seeking direct " << freeBlockAddress  << " (block " << (freeBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                     if(fseek(this->diskFile, freeBlockAddress, SEEK_SET) != 0){
                         perror("fseek failed: ");
                         exit(EXIT_FAILURE);
@@ -703,6 +705,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
 			    cout << "Reading DIRECT first block at address " << directBlockAddress << " (block " << (directBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                 */
                //Go to indirect block
+               cout << "Seeking indirectBlockAddr: " << indirectAddr << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
                if(fseek(this->diskFile, indirectAddr, SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
@@ -717,6 +720,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                }while(dataUsed != -1);
                
              //  cout << "here" <<endl;
+             	cout << "Seeking indirectBlockAddr+offset: " << (indirectAddr+count*sizeof(int)) << " (block " << (indirectAddr - this->startingByte)/ this->blockSize << ")" << endl;
 			   if(fseek(this->diskFile, indirectAddr+count*sizeof(int), SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
@@ -728,6 +732,7 @@ void DiskController::write(string fileName, char letter, int startByte, int numB
                //bytesToWrite -= writeSize;
                
                //Go to datablock to write to 
+               cout << "Seeking directBlockAddress: " << directBlockAddress << " (block " << (directBlockAddress - this->startingByte)/ this->blockSize << ")" << endl;
                if(fseek(this->diskFile, directBlockAddress, SEEK_SET) != 0){
                    perror("fseek failed: ");
                    exit(EXIT_FAILURE);
