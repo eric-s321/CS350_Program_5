@@ -1,3 +1,3 @@
 CREATE test
-WRITE test a 0 71000
+WRITE test a 0 10
 CAT test
