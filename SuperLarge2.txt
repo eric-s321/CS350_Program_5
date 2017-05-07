@@ -1,0 +1,6 @@
+LIST
+DELETE SherlockHolmes
+LIST
+CREATE file3
+CREATE file4
+LIST

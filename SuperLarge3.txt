@@ -1,0 +1,2 @@
+CREATE file2
+LIST

@@ -1,0 +1,5 @@
+IMPORT SherlockHolmes SherlockHolmes.txt
+READ SherlockHolmes 118747 1215
+LIST
+CREATE file1
+DELETE SherlockHolmes
